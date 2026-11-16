@@ -25,18 +25,24 @@ Run lint and typecheck before declaring any task done.
 
 ## Navigation & Routing
 
-- Use **Expo Router** for all navigation. Routes live in `src/app/` — every file there is a screen, `_layout.tsx` files define navigators. Keep non-route code (components, hooks, utils) outside `src/app/`.
-- Import `Link`, `router`, and `useLocalSearchParams` from `expo-router`.
-- Docs: https://docs.expo.dev/router/introduction.md
+- Use **Expo Router**. Routes and `_layout.tsx` navigators live in `src/app/`. Keep everything else out of it.
+- Import `Link`, `router`, `useLocalSearchParams` from `expo-router`. Docs: https://docs.expo.dev/router/introduction.md
 
-## Building with EAS
+## TypeScript docstrings
 
-Use EAS to build, sign, and submit the app in the cloud (`eas build`, `eas submit`) and to ship over-the-air updates (`eas update`) — no local Xcode or Android Studio required. Run EAS CLI as `bunx eas-cli <command>` in Bun projects, or `npx eas-cli@latest <command>` otherwise; substitute that for bare `eas` in docs examples.
-Docs: https://docs.expo.dev/eas/index.md
+- Add TSDoc (`/** ... */`) only to important functions:
+  - Exported/public APIs
+  - Functions with non-obvious logic, side effects, or edge cases
+  - Functions that throw, or take complex params/options objects
+- Skip docstrings for small, private, or self-explanatory helpers. Let clear names and types do the work.
+- Keep them short: one-line summary, then `@param`, `@returns`, and `@throws` only when they add info beyond the types.
+- Don't repeat type info already in the signature.
+- Add an `@example` only for tricky or widely used functions.
 
 ## Rules
 
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
 - Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
+- **No development builds.** This project must run in Expo Go. Do not add any dependency (or dependency version) that needs a development build. Before recommending a package, check its versioned Expo docs page says "Included in Expo Go".
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
 - Workspace layout: before changing the workspace structure or creating a new folder or file, read and follow the design in [docs/workspace.md](docs/workspace.md).
