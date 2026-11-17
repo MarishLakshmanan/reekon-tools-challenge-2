@@ -49,7 +49,10 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "jest"
+    "test": "jest",
+    "server:install": "npm install --prefix server",
+    "server": "npm run dev --prefix server",
+    "seed": "npm run seed --prefix server"
   },
   "private": true,
   "jest": {
