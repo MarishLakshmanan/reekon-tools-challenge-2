@@ -33,6 +33,7 @@ export function text(id: string, x: number, y: number, value = "Hello"): TextLab
 export function doc(annotations: AnnotationDoc["annotations"]): AnnotationDoc {
   return {
     id: "d",
+    projectId: "p",
     image: { uri: "file:///x.jpg", width: 1000, height: 800 },
     annotations,
     createdAt: 0,

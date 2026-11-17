@@ -3,10 +3,16 @@ import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-nativ
 
 export function TextInputModal({
   visible,
+  title = "Add text",
+  placeholder = "Label",
+  confirmLabel = "Add",
   onConfirm,
   onCancel,
 }: {
   visible: boolean;
+  title?: string;
+  placeholder?: string;
+  confirmLabel?: string;
   onConfirm: (text: string) => void;
   onCancel: () => void;
 }) {
@@ -26,14 +32,14 @@ export function TextInputModal({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={cancel}>
       <View style={styles.backdrop}>
         <View style={styles.card}>
-          <Text style={styles.title}>Add text</Text>
-          <TextInput style={styles.input} value={text} onChangeText={setText} autoFocus placeholder="Label" />
+          <Text style={styles.title}>{title}</Text>
+          <TextInput style={styles.input} value={text} onChangeText={setText} autoFocus placeholder={placeholder} />
           <View style={styles.buttons}>
             <Pressable onPress={cancel}>
               <Text style={styles.cancel}>Cancel</Text>
             </Pressable>
             <Pressable onPress={confirm} disabled={!trimmed}>
-              <Text style={[styles.confirm, !trimmed && styles.disabled]}>Add</Text>
+              <Text style={[styles.confirm, !trimmed && styles.disabled]}>{confirmLabel}</Text>
             </Pressable>
           </View>
         </View>

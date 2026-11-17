@@ -6,17 +6,32 @@ import { join } from "node:path";
 import { after, before, describe, test } from "node:test";
 
 import { createApp } from "./app.ts";
+import { hashPassword } from "./auth.ts";
 import { openDb } from "./db.ts";
 
 const textAnnotation = { id: "t1", kind: "text", position: { x: 1, y: 2 }, text: "hi", fontSize: 20, color: "#fff" };
 
+const PASSWORD = "pw";
+const USERS = [
+  { id: "u1", orgId: "org1", email: "a@test", name: "A" },
+  { id: "u2", orgId: "org1", email: "b@test", name: "B" },
+  { id: "u3", orgId: "org1", email: "c@test", name: "C" },
+  { id: "u9", orgId: "org2", email: "z@test", name: "Z" },
+];
+
 let base: string;
 let uploadsDir: string;
 let close: () => void;
+const tokens: Record<string, string> = {};
 
 before(async () => {
   uploadsDir = mkdtempSync(join(tmpdir(), "uploads-"));
   const db = openDb(":memory:");
+  db.insertOrg({ id: "org1", name: "Org One" }, 0);
+  db.insertOrg({ id: "org2", name: "Org Two" }, 0);
+  const passwordHash = hashPassword(PASSWORD);
+  for (const u of USERS) db.insertUser({ ...u, passwordHash }, 0);
+
   const server = createApp({ db, uploadsDir }).listen(0);
   await new Promise((resolve) => server.once("listening", resolve));
   base = `http://localhost:${(server.address() as AddressInfo).port}`;
@@ -25,90 +40,260 @@ before(async () => {
     db.close();
     rmSync(uploadsDir, { recursive: true, force: true });
   };
+
+  for (const u of USERS) {
+    const res = await fetch(`${base}/auth/sign-in`, json("POST", { email: u.email, password: PASSWORD }));
+    tokens[u.id] = (await res.json()).token;
+  }
 });
 
 after(() => close());
 
-function upload(id: string, annotations: unknown = []) {
+function json(method: string, body: unknown, token?: string): RequestInit {
+  return {
+    method,
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify(body),
+  };
+}
+
+const as = (user: string, init: RequestInit = {}): RequestInit => ({
+  ...init,
+  headers: { ...(init.headers as Record<string, string>), Authorization: `Bearer ${tokens[user]}` },
+});
+
+const get = (path: string, user = "u1") => fetch(`${base}${path}`, as(user));
+
+/** u1 creates a project; u2 is added as a member, u3 is not. */
+async function makeProject(id: string, members: string[] = []) {
+  const res = await fetch(`${base}/projects`, as("u1", json("POST", { id, name: `Project ${id}` })));
+  assert.equal(res.status, 201);
+  for (const userId of members) {
+    const added = await fetch(`${base}/projects/${id}/members`, as("u1", json("POST", { userId })));
+    assert.equal(added.status, 201);
+  }
+}
+
+function upload(projectId: string, id: string, annotations: unknown = [], user = "u1") {
   const form = new FormData();
   form.append("id", id);
   form.append("width", "400");
   form.append("height", "300");
   form.append("annotations", JSON.stringify(annotations));
   form.append("image", new Blob([new Uint8Array([0xff, 0xd8, 0xff])], { type: "image/jpeg" }), "image.jpg");
-  return fetch(`${base}/documents`, { method: "POST", body: form });
+  return fetch(`${base}/projects/${projectId}/documents`, as(user, { method: "POST", body: form }));
 }
 
-function put(id: string, body: unknown) {
-  return fetch(`${base}/documents/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+const put = (id: string, body: unknown, user = "u1") => fetch(`${base}/documents/${id}`, as(user, json("PUT", body)));
+
+describe("auth", () => {
+  test("a wrong password or unknown email gets the same 401", async () => {
+    const wrongPassword = await fetch(`${base}/auth/sign-in`, json("POST", { email: "a@test", password: "nope" }));
+    const unknownEmail = await fetch(`${base}/auth/sign-in`, json("POST", { email: "x@test", password: PASSWORD }));
+    assert.equal(wrongPassword.status, 401);
+    assert.equal(unknownEmail.status, 401);
+    assert.deepEqual(await wrongPassword.json(), await unknownEmail.json());
   });
-}
+
+  test("routes need a valid token", async () => {
+    assert.equal((await fetch(`${base}/projects`)).status, 401);
+    assert.equal((await fetch(`${base}/projects`, { headers: { Authorization: "Bearer bad" } })).status, 401);
+  });
+
+  test("/me returns the user and the organization; sign-out ends the session", async () => {
+    const signIn = await fetch(`${base}/auth/sign-in`, json("POST", { email: " A@test ", password: PASSWORD }));
+    const { token } = await signIn.json();
+    const headers = { Authorization: `Bearer ${token}` };
+
+    const me = await (await fetch(`${base}/me`, { headers })).json();
+    assert.deepEqual(me, { user: { id: "u1", name: "A", email: "a@test" }, org: { id: "org1", name: "Org One" } });
+
+    assert.equal((await fetch(`${base}/auth/sign-out`, { method: "POST", headers })).status, 204);
+    assert.equal((await fetch(`${base}/me`, { headers })).status, 401);
+  });
+});
+
+describe("projects", () => {
+  test("creator is owner and member; a retried create returns the same project", async () => {
+    await makeProject("proj1");
+    const retry = await fetch(`${base}/projects`, as("u1", json("POST", { id: "proj1", name: "Project proj1" })));
+    assert.equal(retry.status, 200);
+
+    const list = await (await get("/projects")).json();
+    const item = list.find((p: { id: string }) => p.id === "proj1");
+    assert.equal(item.ownerId, "u1");
+    assert.equal(item.memberCount, 1);
+    assert.equal(item.documentCount, 0);
+
+    const hijack = await fetch(`${base}/projects`, as("u2", json("POST", { id: "proj1", name: "mine" })));
+    assert.equal(hijack.status, 409);
+  });
+
+  test("a blank name is rejected", async () => {
+    const res = await fetch(`${base}/projects`, as("u1", json("POST", { id: "blank1", name: "   " })));
+    assert.equal(res.status, 400);
+  });
+
+  test("non-members get 404 on the project, its documents and its images", async () => {
+    await makeProject("priv1");
+    assert.equal((await upload("priv1", "privdoc1")).status, 201);
+
+    assert.equal((await get("/projects/priv1", "u3")).status, 404);
+    assert.equal((await get("/projects/priv1/documents", "u3")).status, 404);
+    assert.equal((await upload("priv1", "privdoc2", [], "u3")).status, 404);
+    assert.equal((await get("/documents/privdoc1", "u3")).status, 404);
+    assert.equal((await put("privdoc1", { annotations: [], version: 1 }, "u3")).status, 404);
+    assert.equal((await fetch(`${base}/documents/privdoc1`, as("u3", { method: "DELETE" }))).status, 404);
+    assert.equal((await get("/images/privdoc1.jpg", "u3")).status, 404);
+
+    const list = await (await get("/projects", "u3")).json();
+    assert.ok(!list.some((p: { id: string }) => p.id === "priv1"));
+  });
+
+  test("only the owner adds members, and only from the same organization", async () => {
+    await makeProject("team1", ["u2"]);
+
+    const byMember = await fetch(`${base}/projects/team1/members`, as("u2", json("POST", { userId: "u3" })));
+    assert.equal(byMember.status, 403);
+
+    const otherOrg = await fetch(`${base}/projects/team1/members`, as("u1", json("POST", { userId: "u9" })));
+    assert.equal(otherOrg.status, 400);
+    const unknown = await fetch(`${base}/projects/team1/members`, as("u1", json("POST", { userId: "nobody" })));
+    assert.equal(unknown.status, 400);
+
+    const again = await fetch(`${base}/projects/team1/members`, as("u1", json("POST", { userId: "u2" })));
+    assert.equal(again.status, 200);
+
+    const project = await (await get("/projects/team1", "u2")).json();
+    assert.deepEqual(project.members.map((m: { id: string }) => m.id), ["u1", "u2"]);
+  });
+
+  test("the owner deletes a project with its documents and images", async () => {
+    await makeProject("gone1", ["u2"]);
+    assert.equal((await upload("gone1", "gonedoc1")).status, 201);
+    const del = (user: string) => fetch(`${base}/projects/gone1`, as(user, { method: "DELETE" }));
+
+    assert.equal((await del("u2")).status, 403);
+    assert.equal((await del("u1")).status, 204);
+    assert.equal((await get("/projects/gone1", "u2")).status, 404);
+    assert.equal((await get("/documents/gonedoc1")).status, 404);
+    assert.ok(!existsSync(join(uploadsDir, "gonedoc1.jpg")));
+    const list = await (await get("/projects", "u2")).json();
+    assert.ok(!list.some((p: { id: string }) => p.id === "gone1"));
+  });
+
+  test("only the owner removes members, and the owner can't be removed", async () => {
+    await makeProject("rm1", ["u2", "u3"]);
+    assert.equal((await upload("rm1", "rmdoc1")).status, 201);
+    const remove = (user: string, target: string) =>
+      fetch(`${base}/projects/rm1/members/${target}`, as(user, { method: "DELETE" }));
+
+    assert.equal((await remove("u2", "u3")).status, 403);
+    assert.equal((await remove("u1", "u1")).status, 400);
+    assert.equal((await remove("u1", "u2")).status, 204);
+    assert.equal((await remove("u1", "u2")).status, 404);
+
+    assert.equal((await get("/projects/rm1", "u2")).status, 404);
+    assert.equal((await get("/documents/rmdoc1", "u2")).status, 404);
+    assert.equal((await get("/images/rmdoc1.jpg", "u2")).status, 404);
+    const list = await (await get("/projects", "u2")).json();
+    assert.ok(!list.some((p: { id: string }) => p.id === "rm1"));
+    assert.equal((await get("/projects/rm1", "u3")).status, 200);
+  });
+
+  test("GET /org/users lists only the caller's organization", async () => {
+    const users = await (await get("/org/users")).json();
+    assert.deepEqual(users.map((u: { id: string }) => u.id), ["u1", "u2", "u3"]);
+  });
+});
 
 describe("documents API", () => {
   test("POST creates a document, and a retry returns it instead of a duplicate", async () => {
-    const first = await upload("abc1", [textAnnotation]);
+    await makeProject("docs1");
+    const first = await upload("docs1", "abc1", [textAnnotation]);
     assert.equal(first.status, 201);
     const doc = await first.json();
     assert.equal(doc.version, 1);
+    assert.equal(doc.projectId, "docs1");
     assert.deepEqual(doc.annotations, [textAnnotation]);
-    assert.equal(doc.image.uri, `${base}/images/abc1.jpg`);
+    assert.equal(doc.image.uri, "/images/abc1.jpg");
     assert.ok(existsSync(join(uploadsDir, "abc1.jpg")));
 
-    const retry = await upload("abc1");
+    const retry = await upload("docs1", "abc1");
     assert.equal(retry.status, 200);
     assert.deepEqual((await retry.json()).annotations, [textAnnotation]);
 
-    const list = await (await fetch(`${base}/documents`)).json();
+    const list = await (await get("/projects/docs1/documents")).json();
     assert.equal(list.filter((d: { id: string }) => d.id === "abc1").length, 1);
   });
 
+  test("an id already used in another project is a 409, not that project's document", async () => {
+    await makeProject("docs2");
+    await makeProject("docs3");
+    assert.equal((await upload("docs2", "shared1")).status, 201);
+    assert.equal((await upload("docs3", "shared1")).status, 409);
+  });
+
   test("GET list omits annotations; GET by id and the image are served", async () => {
-    await upload("list1");
-    const list = await (await fetch(`${base}/documents`)).json();
+    await makeProject("docs4");
+    await upload("docs4", "list1");
+    const list = await (await get("/projects/docs4/documents")).json();
     const item = list.find((d: { id: string }) => d.id === "list1");
-    assert.deepEqual(Object.keys(item).sort(), ["id", "image", "updatedAt", "version"]);
+    assert.deepEqual(Object.keys(item).sort(), ["id", "image", "projectId", "updatedAt", "version"]);
 
-    const doc = await (await fetch(`${base}/documents/list1`)).json();
+    const doc = await (await get("/documents/list1")).json();
     assert.deepEqual(doc.annotations, []);
-    assert.deepEqual(doc.image, { uri: `${base}/images/list1.jpg`, width: 400, height: 300 });
+    assert.deepEqual(doc.image, { uri: "/images/list1.jpg", width: 400, height: 300 });
 
-    const image = await fetch(doc.image.uri);
-    assert.equal(image.status, 200);
+    assert.equal((await fetch(`${base}${doc.image.uri}`)).status, 401);
+    assert.equal((await get(doc.image.uri)).status, 200);
+  });
+
+  test("an added member can read and save a document", async () => {
+    await makeProject("docs5");
+    await upload("docs5", "shared2");
+    assert.equal((await put("shared2", { annotations: [], version: 1 }, "u2")).status, 404);
+
+    await fetch(`${base}/projects/docs5/members`, as("u1", json("POST", { userId: "u2" })));
+    const ok = await put("shared2", { annotations: [textAnnotation], version: 1 }, "u2");
+    assert.equal(ok.status, 200);
+    const doc = await (await get("/documents/shared2", "u1")).json();
+    assert.deepEqual(doc.annotations, [textAnnotation]);
   });
 
   test("PUT bumps the version, and a stale version gets 409", async () => {
-    await upload("put1");
+    await makeProject("docs6");
+    await upload("docs6", "put1");
     const ok = await put("put1", { annotations: [textAnnotation], version: 1 });
     assert.equal(ok.status, 200);
     assert.equal((await ok.json()).version, 2);
 
     const stale = await put("put1", { annotations: [], version: 1 });
     assert.equal(stale.status, 409);
-    const doc = await (await fetch(`${base}/documents/put1`)).json();
+    const doc = await (await get("/documents/put1")).json();
     assert.deepEqual(doc.annotations, [textAnnotation]);
   });
 
   test("invalid annotations get 400", async () => {
-    await upload("bad1");
+    await makeProject("docs7");
+    await upload("docs7", "bad1");
     assert.equal((await put("bad1", { annotations: [{ kind: "circle" }], version: 1 })).status, 400);
-    assert.equal((await upload("bad2", [{ id: "x", kind: "text" }])).status, 400);
-    assert.equal((await fetch(`${base}/documents/bad2`)).status, 404);
+    assert.equal((await upload("docs7", "bad2", [{ id: "x", kind: "text" }])).status, 400);
+    assert.equal((await get("/documents/bad2")).status, 404);
   });
 
   test("DELETE removes the row and the image file", async () => {
-    await upload("del1");
-    const res = await fetch(`${base}/documents/del1`, { method: "DELETE" });
+    await makeProject("docs8");
+    await upload("docs8", "del1");
+    const res = await fetch(`${base}/documents/del1`, as("u1", { method: "DELETE" }));
     assert.equal(res.status, 204);
-    assert.equal((await fetch(`${base}/documents/del1`)).status, 404);
+    assert.equal((await get("/documents/del1")).status, 404);
     assert.ok(!existsSync(join(uploadsDir, "del1.jpg")));
   });
 
   test("unknown ids get 404", async () => {
-    assert.equal((await fetch(`${base}/documents/nope`)).status, 404);
+    assert.equal((await get("/documents/nope")).status, 404);
     assert.equal((await put("nope", { annotations: [], version: 1 })).status, 404);
-    assert.equal((await fetch(`${base}/documents/nope`, { method: "DELETE" })).status, 404);
+    assert.equal((await fetch(`${base}/documents/nope`, as("u1", { method: "DELETE" }))).status, 404);
   });
 });

@@ -101,7 +101,7 @@ export function EditorScreen({ initialDoc }: { initialDoc: AnnotationDoc }) {
       discarded.current = true;
       await saveDoc(toLocalDoc(remote));
       // Same route again, so the editor remounts with the server's document.
-      router.replace(`/editor/${doc.id}`);
+      router.replace(`/projects/${doc.projectId}/editor/${doc.id}`);
     } catch (e) {
       discarded.current = false;
       Alert.alert("Could not load the server copy", errorMessage(e));
@@ -127,7 +127,7 @@ export function EditorScreen({ initialDoc }: { initialDoc: AnnotationDoc }) {
       return;
     }
     discarded.current = true;
-    deleteLocalDoc(doc.id);
+    deleteLocalDoc(doc.projectId, doc.id);
     router.back();
   }
 

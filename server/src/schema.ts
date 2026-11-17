@@ -57,3 +57,17 @@ export const createSchema = z.object({
     }
   }).pipe(annotationsSchema),
 });
+
+const id = z.string().regex(/^[a-z0-9]+$/);
+
+export const signInSchema = z.object({
+  email: z.string().trim().toLowerCase(),
+  password: z.string().min(1),
+});
+
+export const createProjectSchema = z.object({
+  id,
+  name: z.string().trim().min(1).max(100),
+});
+
+export const addMemberSchema = z.object({ userId: z.string().min(1) });

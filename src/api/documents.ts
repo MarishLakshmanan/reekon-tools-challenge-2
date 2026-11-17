@@ -1,38 +1,27 @@
-import { fetch } from "expo/fetch";
-
+import { ApiError, apiUrl, request } from "@/api/client";
 import { localImage } from "@/utils/annotations/storage";
 import type { Annotation, AnnotationDoc } from "@/utils/annotations/types";
 
-/** A document as the server returns it. `image.uri` is the server URL. */
+export { ApiError };
+
+/** A document as the server returns it. `image.uri` is a server path such as `/images/<file>`. */
 export type RemoteDoc = Omit<AnnotationDoc, "serverVersion" | "savedAt"> & { version: number };
 export type RemoteSummary = Omit<RemoteDoc, "annotations" | "createdAt">;
 
-/** The server answered with a non-2xx status. Network failures throw the fetch error instead. */
-export class ApiError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
-
-function url(path: string) {
-  const base = process.env.EXPO_PUBLIC_API_URL;
-  if (!base) throw new Error("EXPO_PUBLIC_API_URL is not set");
-  return `${base}${path}`;
-}
-
-async function request(path: string, init?: Parameters<typeof fetch>[1]) {
-  const res = await fetch(url(path), init);
-  if (!res.ok) throw new ApiError(res.status, `${init?.method ?? "GET"} ${path} failed with ${res.status}`);
-  return res;
+/** The server sends image paths (`/images/<file>`); this adds the server address the app is configured with. */
+function imageUrl(path: string): string {
+  return apiUrl(path);
 }
 
 /** A downloaded document, marked as saved at the server's version. */
 export function toLocalDoc(remote: RemoteDoc): AnnotationDoc {
   const { version, ...doc } = remote;
-  return { ...doc, serverVersion: version, savedAt: doc.updatedAt };
+  return {
+    ...doc,
+    image: { ...doc.image, uri: imageUrl(doc.image.uri) },
+    serverVersion: version,
+    savedAt: doc.updatedAt,
+  };
 }
 
 /**
@@ -45,8 +34,8 @@ export async function uploadDoc(doc: AnnotationDoc): Promise<{ created: boolean;
   form.append("width", String(doc.image.width));
   form.append("height", String(doc.image.height));
   form.append("annotations", JSON.stringify(doc.annotations));
-  form.append("image", localImage(doc.id));
-  const res = await request("/documents", { method: "POST", body: form });
+  form.append("image", localImage(doc.projectId, doc.id));
+  const res = await request(`/projects/${doc.projectId}/documents`, { method: "POST", body: form });
   return { created: res.status === 201, remote: await res.json() };
 }
 
@@ -64,8 +53,8 @@ export async function updateDoc(
   return res.json();
 }
 
-export async function listRemote(): Promise<RemoteSummary[]> {
-  return (await request("/documents")).json();
+export async function listRemote(projectId: string): Promise<RemoteSummary[]> {
+  return (await request(`/projects/${projectId}/documents`)).json();
 }
 
 export async function getRemote(id: string): Promise<RemoteDoc> {
@@ -87,11 +76,11 @@ export async function saveToServer(doc: AnnotationDoc): Promise<{ version: numbe
     }
   }
   const { created, remote } = await uploadDoc(doc);
-  if (created) return { version: remote.version, imageUri: remote.image.uri };
+  if (created) return { version: remote.version, imageUri: imageUrl(remote.image.uri) };
   // An earlier upload went through but its response was lost. That created version 1;
   // send the current annotations on top, so edits made since then aren't dropped.
   const updated = await updateDoc(doc.id, doc.annotations, 1);
-  return { version: updated.version, imageUri: remote.image.uri };
+  return { version: updated.version, imageUri: imageUrl(remote.image.uri) };
 }
 
 /** Deletes on the server. A 404 counts as success, since the document is gone either way. */

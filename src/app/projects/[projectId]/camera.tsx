@@ -1,5 +1,5 @@
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -7,6 +7,7 @@ import { createDoc } from "@/utils/annotations/storage";
 
 export default function Camera() {
   const router = useRouter();
+  const { projectId } = useLocalSearchParams<{ projectId: string }>();
   const camera = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [ready, setReady] = useState(false);
@@ -29,8 +30,8 @@ export default function Camera() {
     setBusy(true);
     try {
       const photo = await camera.current.takePictureAsync();
-      const doc = await createDoc(photo.uri);
-      router.replace(`/editor/${doc.id}`);
+      const doc = await createDoc(projectId, photo.uri);
+      router.replace(`/projects/${projectId}/editor/${doc.id}`);
     } finally {
       setBusy(false);
     }
