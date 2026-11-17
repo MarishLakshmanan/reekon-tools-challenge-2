@@ -42,7 +42,16 @@ Run lint and typecheck before declaring any task done.
 ## Rules
 
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
-- Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
-- **No development builds.** This project must run in Expo Go. Do not add any dependency (or dependency version) that needs a development build. Before recommending a package, check its versioned Expo docs page says "Included in Expo Go".
+- **No development builds.** This project must run in Expo Go. Do not add any dependency (or dependency version) that needs a development build.
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
 - Workspace layout: before changing the workspace structure or creating a new folder or file, read and follow the design in [docs/workspace.md](docs/workspace.md).
+
+## Testing on the emulator (Mobile MCP)
+
+To see the app on the Android emulator:
+
+1. Run `adb reverse tcp:8081 tcp:8081`.
+2. Start the app in the background with `npx expo start --android`.
+3. Wait until it has loaded on the emulator.
+4. Read the screen with `mobile_list_elements_on_screen`. It returns the element tree (like the DOM) with labels and coordinates, and taps can use its refs.
+5. Only take a screenshot when the tree can't answer the question, for example a Skia canvas, which draws no elements, or a visual check.
