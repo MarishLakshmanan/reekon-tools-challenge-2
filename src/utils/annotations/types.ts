@@ -17,14 +17,17 @@ export type PenPath = {
 
 export type MeasurementUnit = "mm" | "cm" | "m" | "in" | "ft";
 
-/** A length the user typed in for one segment of a path (two adjacent anchors). */
-export type Measurement = {
+/** One segment of a path: two adjacent anchors. */
+export type Segment = { pathId: string; startAnchorId: string; endAnchorId: string };
+
+/** Not on any segment: kept in the list and saved, but not drawn on the photo. */
+export type Unassigned = { pathId: null; startAnchorId: null; endAnchorId: null };
+
+/** A length for one segment of a path, or unassigned when its segment was deleted or it was never linked. */
+export type Measurement = (Segment | Unassigned) & {
   id: string;
   kind: "measurement";
-  pathId: string;
-  startAnchorId: string;
-  endAnchorId: string;
-  /** Typed in by the user; the photo has no real-world scale. */
+  /** The photo has no real-world scale, so this is never computed. */
   value: number;
   unit: MeasurementUnit;
   /** Distance of the label from the segment, in image pixels. */

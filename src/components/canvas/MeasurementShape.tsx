@@ -23,8 +23,9 @@ export function MeasurementShape({
   fontSize: number;
   strokeWidth: number;
   selected: boolean;
-  pxToImage: number;
+  pxToImage: SharedValue<number>;
 }) {
+  const handleRadius = useDerivedValue(() => 7 * pxToImage.value);
   const layout = useDerivedValue(() => {
     const current = findAnnotation(live.value, measurement.id);
     const out =
@@ -44,7 +45,7 @@ export function MeasurementShape({
       <Text x={labelX} y={labelY} text={measurementLabel(measurement)} font={font} color={measurement.color} />
       {selected &&
         [p1, p2].map((c, i) => (
-          <Circle key={i} c={c} r={7 * pxToImage} color="#ff9f0a" />
+          <Circle key={i} c={c} r={handleRadius} color="#ff9f0a" />
         ))}
     </>
   );

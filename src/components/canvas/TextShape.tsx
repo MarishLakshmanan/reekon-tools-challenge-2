@@ -1,5 +1,6 @@
-import { Rect, Text } from "@shopify/react-native-skia";
-import type { SkFont } from "@shopify/react-native-skia";
+import { Rect, Text, matchFont } from "@shopify/react-native-skia";
+import { useMemo } from "react";
+import { Platform } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 import { useDerivedValue } from "react-native-reanimated";
 
@@ -9,16 +10,20 @@ import type { Annotation, TextLabel } from "@/utils/annotations/types";
 export function TextShape({
   live,
   label,
-  font,
   selected,
   pxToImage,
 }: {
   live: SharedValue<Annotation[]>;
   label: TextLabel;
-  font: SkFont;
   selected: boolean;
-  pxToImage: number;
+  pxToImage: SharedValue<number>;
 }) {
+  // Each label keeps the size it was created with, so changing the text size setting does not resize old ones.
+  const font = useMemo(
+    () => matchFont({ fontFamily: Platform.select({ ios: "Helvetica", default: "sans-serif" }), fontSize: label.fontSize }),
+    [label.fontSize],
+  );
+  const outline = useDerivedValue(() => 2 * pxToImage.value);
   const position = useDerivedValue(() => {
     const current = findAnnotation(live.value, label.id);
     return current?.kind === "text" ? current.position : { x: -1e6, y: -1e6 };
@@ -38,7 +43,7 @@ export function TextShape({
           height={label.fontSize * 1.2}
           style="stroke"
           color="#ff9f0a"
-          strokeWidth={2 * pxToImage}
+          strokeWidth={outline}
         />
       )}
     </>

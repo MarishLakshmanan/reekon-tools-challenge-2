@@ -7,8 +7,7 @@ export function styleFor(imageWidth: number) {
     strokeWidth: Math.max(2, imageWidth * 0.004),
     fontSize: imageWidth * 0.04,
     labelOffset: imageWidth * 0.015,
-    pathColor: "#ff3b30",
+    // Line and text colors come from settings.
     measureColor: "#0a84ff",
-    textColor: "#ffd60a",
   };
 }

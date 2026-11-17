@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
+import { UNITS } from "@/utils/annotations/measurements";
 import type { MeasurementUnit } from "@/utils/annotations/types";
-
-const UNITS: MeasurementUnit[] = ["mm", "cm", "m", "in", "ft"];
 
 /** Mount it only while open; it starts from `initial` each time. */
 export function MeasurementValueModal({

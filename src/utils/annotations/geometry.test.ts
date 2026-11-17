@@ -1,4 +1,7 @@
 import {
+  IDENTITY_CAMERA,
+  clampCamera,
+  combineView,
   distToSegment,
   findMeasurement,
   fitTransform,
@@ -7,6 +10,7 @@ import {
   measurementLayout,
   pickDragTarget,
   toImagePoint,
+  zoomAround,
 } from "./geometry";
 import { measurement, path, text } from "./testFixtures";
 
@@ -107,5 +111,39 @@ describe("fitTransform", () => {
     const v = fitTransform(400, 800, 1000, 500);
     expect(v).toEqual({ scale: 0.4, tx: 0, ty: 300 });
     expect(toImagePoint(200, 400, v)).toEqual({ x: 500, y: 250 });
+  });
+});
+
+describe("camera", () => {
+  const fit = fitTransform(400, 400, 200, 100); // scale 2, ty 100
+
+  it("identity camera leaves the fit transform unchanged", () => {
+    expect(combineView(fit, IDENTITY_CAMERA)).toEqual(fit);
+  });
+
+  it("zoomAround keeps the focal point on the same image point", () => {
+    const focal = { x: 150, y: 220 };
+    const before = toImagePoint(focal.x, focal.y, combineView(fit, IDENTITY_CAMERA));
+    const cam = zoomAround(IDENTITY_CAMERA, focal, 3);
+    const after = toImagePoint(focal.x, focal.y, combineView(fit, cam));
+    expect(cam.zoom).toBe(3);
+    expect(after.x).toBeCloseTo(before.x);
+    expect(after.y).toBeCloseTo(before.y);
+  });
+
+  it("zoomAround clamps to 1x-5x", () => {
+    expect(zoomAround(IDENTITY_CAMERA, { x: 0, y: 0 }, 50).zoom).toBe(5);
+    expect(zoomAround(IDENTITY_CAMERA, { x: 0, y: 0 }, 0.1).zoom).toBe(1);
+  });
+
+  it("clampCamera returns the identity camera at 1x", () => {
+    expect(clampCamera({ zoom: 1, x: 80, y: -40 }, fit, 400, 400, 200, 100)).toEqual(IDENTITY_CAMERA);
+  });
+
+  it("clampCamera keeps a zoomed photo covering the canvas", () => {
+    const far = clampCamera({ zoom: 2, x: 999, y: -999 }, fit, 400, 400, 200, 100);
+    const v = combineView(fit, far);
+    expect(v.tx).toBeLessThanOrEqual(0); // left edge never past the canvas edge
+    expect(v.tx + 200 * v.scale).toBeGreaterThanOrEqual(400);
   });
 });

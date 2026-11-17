@@ -62,9 +62,14 @@ export function HomeScreen() {
       <Stack.Screen
         options={{
           headerRight: () => (
-            <Pressable onPress={confirmSignOut} hitSlop={8}>
-              <Text style={styles.headerAction}>Sign out</Text>
-            </Pressable>
+            <View style={styles.headerActions}>
+              <Pressable onPress={() => router.push("/settings")} hitSlop={8}>
+                <Text style={styles.headerAction}>Settings</Text>
+              </Pressable>
+              <Pressable onPress={confirmSignOut} hitSlop={8}>
+                <Text style={styles.headerAction}>Sign out</Text>
+              </Pressable>
+            </View>
           ),
         }}
       />
@@ -114,6 +119,7 @@ export function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16, gap: 12 },
+  headerActions: { flexDirection: "row", gap: 16 },
   headerAction: { color: "#0a84ff", fontSize: 16 },
   header: { gap: 2, marginBottom: 4 },
   user: { fontSize: 16, fontWeight: "600", color: "#111" },

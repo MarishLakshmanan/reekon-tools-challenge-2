@@ -26,6 +26,10 @@ export function measurement(id: string, pathId: string, from: number, to: number
   };
 }
 
+export function unassigned(id: string): Measurement {
+  return { ...measurement(id, "x", 0, 1), pathId: null, startAnchorId: null, endAnchorId: null };
+}
+
 export function text(id: string, x: number, y: number, value = "Hello"): TextLabel {
   return { id, kind: "text", position: { x, y }, text: value, fontSize: 20, color: "#ff0" };
 }

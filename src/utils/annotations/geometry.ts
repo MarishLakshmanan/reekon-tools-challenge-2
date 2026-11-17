@@ -1,5 +1,6 @@
 import type { DocAction } from "./docReducer";
-import type { Annotation, Measurement, PenPath, Point } from "./types";
+import { formatMeasurement } from "./measurements";
+import type { Annotation, Measurement, PenPath, Point, Segment } from "./types";
 
 // Every function here is a worklet so gesture callbacks can call it on the UI
 // thread. A worklet captures the functions it calls when it is created, so a
@@ -9,7 +10,7 @@ import type { Annotation, Measurement, PenPath, Point } from "./types";
 export type Hit = { id: string; anchorId?: string };
 
 /** One straight piece of a path, between two adjacent anchors. */
-export type Segment = { pathId: string; startAnchorId: string; endAnchorId: string };
+export type { Segment } from "./types";
 
 /**
  * Lookup helpers for worklets in components. React Compiler hoists inline
@@ -92,7 +93,7 @@ export function findMeasurement(annotations: Annotation[], seg: Segment): Measur
 
 export function measurementLabel(m: Measurement): string {
   "worklet";
-  return `${m.value} ${m.unit}`;
+  return formatMeasurement(m.value, m.unit);
 }
 
 /**
@@ -107,6 +108,7 @@ export function measurementLayout(
   fontSize: number,
 ): { p1: Point; p2: Point; label: Point } | null {
   "worklet";
+  if (m.pathId === null) return null;
   const p1 = findAnchorPoint(annotations, m.pathId, m.startAnchorId);
   const p2 = findAnchorPoint(annotations, m.pathId, m.endAnchorId);
   if (!p1 || !p2) return null;
@@ -247,3 +249,47 @@ export function toImagePoint(x: number, y: number, v: ViewTransform): Point {
   return { x: (x - v.tx) / v.scale, y: (y - v.ty) / v.scale };
 }
 
+
+/** Zoom and pan on top of the fit transform. `x`/`y` are screen-pixel offsets applied after zooming. */
+export type Camera = { zoom: number; x: number; y: number };
+
+export const IDENTITY_CAMERA: Camera = { zoom: 1, x: 0, y: 0 };
+export const MIN_ZOOM = 1;
+export const MAX_ZOOM = 5;
+
+/** The image-to-screen transform with the camera applied. */
+export function combineView(fit: ViewTransform, cam: Camera): ViewTransform {
+  "worklet";
+  return { scale: fit.scale * cam.zoom, tx: fit.tx * cam.zoom + cam.x, ty: fit.ty * cam.zoom + cam.y };
+}
+
+/** Scales `start` by `factor` (clamped to the zoom limits), keeping the screen point `focal` fixed. */
+export function zoomAround(start: Camera, focal: Point, factor: number): Camera {
+  "worklet";
+  const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, start.zoom * factor));
+  const ratio = zoom / start.zoom;
+  return { zoom, x: focal.x - (focal.x - start.x) * ratio, y: focal.y - (focal.y - start.y) * ratio };
+}
+
+/** Keeps the photo covering the canvas when it is larger than it, and centred when it is smaller. */
+export function clampCamera(
+  cam: Camera,
+  fit: ViewTransform,
+  canvasW: number,
+  canvasH: number,
+  imageW: number,
+  imageH: number,
+): Camera {
+  "worklet";
+  const axis = (offset: number, fitOffset: number, canvas: number, image: number) => {
+    const shown = image * fit.scale * cam.zoom;
+    const base = fitOffset * cam.zoom;
+    if (shown <= canvas) return (canvas - shown) / 2 - base;
+    return Math.min(-base, Math.max(canvas - shown - base, offset));
+  };
+  return {
+    zoom: cam.zoom,
+    x: axis(cam.x, fit.tx, canvasW, imageW),
+    y: axis(cam.y, fit.ty, canvasH, imageH),
+  };
+}

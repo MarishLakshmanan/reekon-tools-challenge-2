@@ -1,5 +1,4 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export type Tool = "select" | "pen" | "measure" | "text";
 
@@ -15,6 +14,7 @@ export function Toolbar({
   onToolChange,
   onFinishPath,
   onDelete,
+  onUndo,
 }: {
   tool: Tool;
   onToolChange: (tool: Tool) => void;
@@ -22,10 +22,11 @@ export function Toolbar({
   onFinishPath?: () => void;
   /** Set only while something is selected. */
   onDelete?: () => void;
+  /** Set only while there is something to undo. */
+  onUndo?: () => void;
 }) {
-  const { bottom } = useSafeAreaInsets();
   return (
-    <View style={[styles.bar, { paddingBottom: bottom + 8 }]}>
+    <View style={styles.bar}>
       <View style={styles.row}>
         {TOOLS.map((t) => (
           <Pressable key={t.id} style={[styles.tool, tool === t.id && styles.active]} onPress={() => onToolChange(t.id)}>
@@ -33,8 +34,13 @@ export function Toolbar({
           </Pressable>
         ))}
       </View>
-      {(onFinishPath || onDelete) && (
+      {(onFinishPath || onDelete || onUndo) && (
         <View style={styles.row}>
+          {onUndo && (
+            <Pressable style={[styles.action, styles.undo]} onPress={onUndo}>
+              <Text style={styles.actionLabel}>Undo</Text>
+            </Pressable>
+          )}
           {onFinishPath && (
             <Pressable style={styles.action} onPress={onFinishPath}>
               <Text style={styles.actionLabel}>Done</Text>
@@ -52,7 +58,7 @@ export function Toolbar({
 }
 
 const styles = StyleSheet.create({
-  bar: { paddingTop: 8, paddingHorizontal: 12, gap: 8, backgroundColor: "#f2f2f7" },
+  bar: { paddingVertical: 8, paddingHorizontal: 12, gap: 8 },
   row: { flexDirection: "row", gap: 8 },
   tool: { flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: "center", backgroundColor: "#e5e5ea" },
   active: { backgroundColor: "#0a84ff" },
@@ -60,5 +66,6 @@ const styles = StyleSheet.create({
   activeLabel: { color: "white" },
   action: { flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: "center", backgroundColor: "#34c759" },
   danger: { backgroundColor: "#ff3b30" },
+  undo: { backgroundColor: "#8e8e93" },
   actionLabel: { color: "white", fontWeight: "600" },
 });

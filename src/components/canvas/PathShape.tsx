@@ -11,22 +11,24 @@ function AnchorDot({
   live,
   pathId,
   anchorId,
-  radius,
+  pxToImage,
   highlighted,
 }: {
   live: SharedValue<Annotation[]>;
   pathId: string;
   anchorId: string;
-  radius: number;
+  pxToImage: SharedValue<number>;
   highlighted: boolean;
 }) {
+  const radius = useDerivedValue(() => 7 * pxToImage.value);
+  const ring = useDerivedValue(() => (7 * pxToImage.value) / 3);
   const center = useDerivedValue(() => {
     return findAnchorPoint(live.value, pathId, anchorId) ?? OFFSCREEN;
   });
   return (
     <>
       <Circle c={center} r={radius} color="white" />
-      <Circle c={center} r={radius} color={highlighted ? "#ff9f0a" : "#0a84ff"} style="stroke" strokeWidth={radius / 3} />
+      <Circle c={center} r={radius} color={highlighted ? "#ff9f0a" : "#0a84ff"} style="stroke" strokeWidth={ring} />
     </>
   );
 }
@@ -43,7 +45,7 @@ export function PathShape({
   showAnchors: boolean;
   selectedAnchorId?: string;
   /** Image pixels per screen pixel, so handles keep a constant on-screen size. */
-  pxToImage: number;
+  pxToImage: SharedValue<number>;
 }) {
   const skPath = useDerivedValue(() => {
     const current = findAnnotation(live.value, path.id);
@@ -62,7 +64,7 @@ export function PathShape({
             live={live}
             pathId={path.id}
             anchorId={n.id}
-            radius={7 * pxToImage}
+            pxToImage={pxToImage}
             highlighted={n.id === selectedAnchorId}
           />
         ))}

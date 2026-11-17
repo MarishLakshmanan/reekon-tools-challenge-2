@@ -1,36 +1,49 @@
 import { useImage } from "@shopify/react-native-skia";
 import { Stack, useRouter } from "expo-router";
 import { useEffect, useReducer, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { ScrollView } from "react-native-gesture-handler";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ApiError, deleteRemote, getRemote, saveToServer, toLocalDoc, updateDoc } from "@/api/documents";
 
 import { AnnotationCanvas } from "@/components/canvas/AnnotationCanvas";
+import { AddMeasurementRow } from "@/components/AddMeasurementRow";
+import { MeasurementList } from "@/components/MeasurementList";
 import { MeasurementValueModal } from "@/components/MeasurementValueModal";
 import { TextInputModal } from "@/components/TextInputModal";
 import { Toolbar } from "@/components/Toolbar";
 import type { Tool } from "@/components/Toolbar";
+import { useSettings } from "@/hooks/useSettings";
 import { styleFor } from "@/utils/annotations/defaults";
-import { docReducer } from "@/utils/annotations/docReducer";
+import { editorReducer } from "@/utils/annotations/docReducer";
 import type { DocAction } from "@/utils/annotations/docReducer";
 import type { Segment, Selection } from "@/utils/annotations/geometry";
 import { findMeasurement, hitSegment, hitTest } from "@/utils/annotations/geometry";
 import { makeId } from "@/utils/annotations/makeId";
+import { UNASSIGNED, randomValue } from "@/utils/annotations/measurements";
 import { deleteLocalDoc, imageUriFor, saveDoc } from "@/utils/annotations/storage";
 import { hasUnsavedChanges } from "@/utils/annotations/sync";
-import type { AnnotationDoc, MeasurementUnit, PenPath, Point } from "@/utils/annotations/types";
+import type { AnnotationDoc, Measurement, MeasurementUnit, PenPath, Point } from "@/utils/annotations/types";
+import { SIZE_FACTOR, WIDTH_FACTOR } from "@/utils/settings";
 
 const AUTOSAVE_MS = 500;
 
 export function EditorScreen({ initialDoc }: { initialDoc: AnnotationDoc }) {
   const router = useRouter();
-  const [doc, dispatch] = useReducer(docReducer, initialDoc);
+  const [{ doc, past }, dispatch] = useReducer(editorReducer, { doc: initialDoc, past: [] });
   const [busy, setBusy] = useState(false);
   const [tool, setTool] = useState<Tool>("select");
   const [selection, setSelection] = useState<Selection | null>(null);
   const [draft, setDraft] = useState<PenPath | null>(null);
   const [pendingText, setPendingText] = useState<Point | null>(null);
-  const [pendingSegment, setPendingSegment] = useState<Segment | null>(null);
+  /** Segment picked with the Measure tool, waiting for an unassigned card to be tapped. */
+  const [linkSegment, setLinkSegment] = useState<Segment | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [addUnit, setAddUnit] = useState<MeasurementUnit>("cm");
+  const { settings } = useSettings();
+  const { width: windowW, height: windowH } = useWindowDimensions();
+  const { bottom } = useSafeAreaInsets();
 
   // Resolved once: `doc.image.uri` becomes the server URL on the first Save, but the local file stays.
   const [imageUri] = useState(() => imageUriFor(initialDoc));
@@ -141,14 +154,30 @@ export function EditorScreen({ initialDoc }: { initialDoc: AnnotationDoc }) {
   function changeTool(next: Tool) {
     finishPath(false);
     setSelection(null);
+    setLinkSegment(null);
     setTool(next);
   }
 
   function handleTap(p: Point, tolerance: number) {
     if (tool === "select") {
-      setSelection(hitTest(p, doc.annotations, tolerance, style.fontSize));
+      const hit = hitTest(p, doc.annotations, tolerance, style.fontSize);
+      // A measurement label opens its editor instead of being selected.
+      if (hit && doc.annotations.some((a) => a.id === hit.id && a.kind === "measurement")) {
+        setSelection(null);
+        setEditingId(hit.id);
+      } else {
+        setSelection(hit);
+      }
     } else if (tool === "measure") {
-      setPendingSegment(hitSegment(p, doc.annotations, tolerance));
+      const seg = hitSegment(p, doc.annotations, tolerance);
+      const existing = seg ? findMeasurement(doc.annotations, seg) : undefined;
+      // A segment holds one measurement: tapping a measured one edits it instead.
+      if (existing) {
+        setLinkSegment(null);
+        setEditingId(existing.id);
+      } else {
+        setLinkSegment(seg);
+      }
     } else if (tool === "text") {
       setPendingText(p);
     } else if (tool === "pen") {
@@ -166,34 +195,27 @@ export function EditorScreen({ initialDoc }: { initialDoc: AnnotationDoc }) {
               kind: "path",
               anchors: [anchor],
               closed: false,
-              stroke: style.pathColor,
-              strokeWidth: style.strokeWidth,
+              stroke: settings.lineColor,
+              strokeWidth: style.strokeWidth * WIDTH_FACTOR[settings.lineWidth],
             },
       );
     }
   }
 
-  const existingMeasurement = pendingSegment ? findMeasurement(doc.annotations, pendingSegment) : undefined;
+  const editing = doc.annotations.find((a): a is Measurement => a.kind === "measurement" && a.id === editingId);
 
-  function confirmMeasure(value: number, unit: MeasurementUnit) {
-    if (!pendingSegment) return;
-    if (existingMeasurement) {
-      dispatch({ type: "updateMeasurement", id: existingMeasurement.id, value, unit });
+  function confirmEdit(value: number, unit: MeasurementUnit) {
+    if (editing) dispatch({ type: "updateMeasurement", id: editing.id, value, unit });
+    setEditingId(null);
+  }
+
+  function pressCard(m: Measurement) {
+    if (linkSegment && m.pathId === null) {
+      dispatch({ type: "linkMeasurement", id: m.id, segment: linkSegment });
+      setLinkSegment(null);
     } else {
-      dispatch({
-        type: "add",
-        annotation: {
-          id: makeId(),
-          kind: "measurement",
-          ...pendingSegment,
-          value,
-          unit,
-          labelOffset: style.labelOffset,
-          color: style.measureColor,
-        },
-      });
+      setEditingId(m.id);
     }
-    setPendingSegment(null);
   }
 
   function confirmText(text: string) {
@@ -205,11 +227,39 @@ export function EditorScreen({ initialDoc }: { initialDoc: AnnotationDoc }) {
         kind: "text",
         position: pendingText,
         text,
-        fontSize: style.fontSize,
-        color: style.textColor,
+        fontSize: style.fontSize * SIZE_FACTOR[settings.textSize],
+        color: settings.textColor,
       },
     });
     setPendingText(null);
+  }
+
+  function addRandomMeasurement() {
+    dispatch({
+      type: "add",
+      annotation: {
+        id: makeId(),
+        kind: "measurement",
+        ...UNASSIGNED,
+        value: randomValue(addUnit),
+        unit: addUnit,
+        labelOffset: style.labelOffset,
+        color: style.measureColor,
+      },
+    });
+  }
+
+  /** While drawing, removes the draft's last point; otherwise steps back one edit. */
+  function undo() {
+    if (draft) {
+      setDraft(draft.anchors.length > 1 ? { ...draft, anchors: draft.anchors.slice(0, -1) } : null);
+      return;
+    }
+    dispatch({ type: "undo" });
+    // What these point at may not exist after the undo.
+    setSelection(null);
+    setLinkSegment(null);
+    setEditingId(null);
   }
 
   function deleteSelection() {
@@ -252,30 +302,42 @@ export function EditorScreen({ initialDoc }: { initialDoc: AnnotationDoc }) {
     );
   }
 
+  const measurements = doc.annotations.filter((a): a is Measurement => a.kind === "measurement");
+  // As tall as the photo needs, up to 70% of the screen: enough for 3:4 camera photos to fill the width.
+  const canvasHeight = Math.min((windowW * doc.image.height) / doc.image.width, windowH * 0.7);
+
   return (
     <View style={styles.fill}>
       {header}
-      <AnnotationCanvas
-        image={image}
-        annotations={annotations}
-        tool={tool}
-        selection={selection}
-        onTap={handleTap}
-        onSelect={setSelection}
-        onCommit={dispatch}
-      />
-      <Toolbar
-        tool={tool}
-        onToolChange={changeTool}
-        onFinishPath={draft && draft.anchors.length >= 2 ? () => finishPath(false) : undefined}
-        onDelete={selection ? deleteSelection : undefined}
-      />
-      {pendingSegment && (
-        <MeasurementValueModal
-          initial={existingMeasurement}
-          onConfirm={confirmMeasure}
-          onCancel={() => setPendingSegment(null)}
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottom + 16 }]}>
+        <AnnotationCanvas
+          image={image}
+          height={canvasHeight}
+          annotations={annotations}
+          tool={tool}
+          selection={selection}
+          highlight={linkSegment}
+          onTap={handleTap}
+          onSelect={setSelection}
+          onCommit={dispatch}
         />
+        <Toolbar
+          tool={tool}
+          onToolChange={changeTool}
+          onFinishPath={draft && draft.anchors.length >= 2 ? () => finishPath(false) : undefined}
+          onDelete={selection ? deleteSelection : undefined}
+          onUndo={draft || past.length > 0 ? undo : undefined}
+        />
+        <AddMeasurementRow unit={addUnit} onUnitChange={setAddUnit} onAdd={addRandomMeasurement} />
+        <MeasurementList
+          measurements={measurements}
+          linking={linkSegment !== null}
+          onPress={pressCard}
+          onRemove={(m) => dispatch({ type: "delete", id: m.id })}
+        />
+      </ScrollView>
+      {editing && (
+        <MeasurementValueModal initial={editing} onConfirm={confirmEdit} onCancel={() => setEditingId(null)} />
       )}
       <TextInputModal visible={pendingText !== null} onConfirm={confirmText} onCancel={() => setPendingText(null)} />
     </View>
@@ -283,7 +345,8 @@ export function EditorScreen({ initialDoc }: { initialDoc: AnnotationDoc }) {
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, backgroundColor: "black" },
+  fill: { flex: 1, backgroundColor: "white" },
+  content: { gap: 12 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   headerButtons: { flexDirection: "row", alignItems: "center", gap: 20 },
   headerButton: { fontSize: 16, fontWeight: "600", color: "#0a84ff" },

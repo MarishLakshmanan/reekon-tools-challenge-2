@@ -14,17 +14,20 @@ const penPath = z.object({
   strokeWidth: z.number(),
 });
 
-const measurement = z.object({
+const measurementFields = {
   id: z.string(),
   kind: z.literal("measurement"),
-  pathId: z.string(),
-  startAnchorId: z.string(),
-  endAnchorId: z.string(),
   value: z.number(),
   unit: z.enum(["mm", "cm", "m", "in", "ft"]),
   labelOffset: z.number(),
   color: z.string(),
-});
+};
+
+// On a segment, or unassigned with all three segment fields null.
+const measurement = z.union([
+  z.object({ ...measurementFields, pathId: z.string(), startAnchorId: z.string(), endAnchorId: z.string() }),
+  z.object({ ...measurementFields, pathId: z.null(), startAnchorId: z.null(), endAnchorId: z.null() }),
+]);
 
 const textLabel = z.object({
   id: z.string(),
@@ -36,7 +39,7 @@ const textLabel = z.object({
 });
 
 export const annotationsSchema: z.ZodType<Annotation[]> = z.array(
-  z.discriminatedUnion("kind", [penPath, measurement, textLabel]),
+  z.union([penPath, measurement, textLabel]),
 );
 
 export const updateSchema = z.object({

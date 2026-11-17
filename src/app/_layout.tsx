@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { SessionProvider, useSession } from "@/hooks/useSession";
+import { SettingsProvider } from "@/hooks/useSettings";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -21,9 +22,14 @@ function Routes() {
     <Stack>
       <Stack.Protected guard={!!me}>
         <Stack.Screen name="index" options={{ title: me?.org.name ?? "" }} />
+        <Stack.Screen name="settings" options={{ title: "Settings" }} />
         <Stack.Screen name="projects/[projectId]/index" options={{ title: "Project" }} />
         <Stack.Screen name="projects/[projectId]/camera" options={{ title: "Camera" }} />
-        <Stack.Screen name="projects/[projectId]/editor/[id]" options={{ title: "Annotate" }} />
+        {/* Opaque on iOS 26, where headers are transparent by default and the photo would draw under it. */}
+        <Stack.Screen
+          name="projects/[projectId]/editor/[id]"
+          options={{ title: "Annotate", headerTransparent: false, headerStyle: { backgroundColor: "white" } }}
+        />
       </Stack.Protected>
       <Stack.Protected guard={!me}>
         <Stack.Screen name="sign-in" options={{ title: "Sign in" }} />
@@ -36,7 +42,9 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SessionProvider>
-        <Routes />
+        <SettingsProvider>
+          <Routes />
+        </SettingsProvider>
       </SessionProvider>
     </GestureHandlerRootView>
   );

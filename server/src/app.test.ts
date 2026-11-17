@@ -282,6 +282,18 @@ describe("documents API", () => {
     assert.equal((await get("/documents/bad2")).status, 404);
   });
 
+  test("measurements are accepted on a segment or unassigned, but not half-assigned", async () => {
+    await makeProject("docs9");
+    await upload("docs9", "meas1");
+    const fields = { id: "m1", kind: "measurement", value: 12, unit: "cm", labelOffset: 4, color: "#00f" };
+    const unassigned = { ...fields, pathId: null, startAnchorId: null, endAnchorId: null };
+    const linked = { ...fields, pathId: "p", startAnchorId: "a0", endAnchorId: "a1" };
+    const half = { ...fields, pathId: "p", startAnchorId: null, endAnchorId: null };
+    assert.equal((await put("meas1", { annotations: [unassigned], version: 1 })).status, 200);
+    assert.equal((await put("meas1", { annotations: [linked], version: 2 })).status, 200);
+    assert.equal((await put("meas1", { annotations: [half], version: 3 })).status, 400);
+  });
+
   test("DELETE removes the row and the image file", async () => {
     await makeProject("docs8");
     await upload("docs8", "del1");
