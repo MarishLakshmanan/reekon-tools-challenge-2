@@ -1,11 +1,12 @@
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Platform, Text, View } from "react-native";
 
+import { PHOTO_UNAVAILABLE, StatusView } from "@/components/StatusView";
 import { EditorScreen } from "@/screens/EditorScreen";
 import { WebEditorScreen } from "@/screens/WebEditorScreen";
 import { downloadImage, loadDoc, localImage } from "@/utils/annotations/storage";
 import type { AnnotationDoc } from "@/utils/annotations/types";
+import { isWeb } from "@/utils/platform";
 
 /**
  * Loads the document, downloading the photo first if it isn't on this phone yet.
@@ -25,7 +26,7 @@ async function load(projectId: string, id: string): Promise<AnnotationDoc | null
 export default function EditorRoute() {
   const { projectId, id } = useLocalSearchParams<{ projectId: string; id: string }>();
   // The web views and edits the server copy directly; the phone works on a local copy.
-  return Platform.OS === "web" ? <WebEditorScreen id={id} /> : <PhoneEditor projectId={projectId} id={id} />;
+  return isWeb ? <WebEditorScreen id={id} /> : <PhoneEditor projectId={projectId} id={id} />;
 }
 
 function PhoneEditor({ projectId, id }: { projectId: string; id: string }) {
@@ -39,19 +40,7 @@ function PhoneEditor({ projectId, id }: { projectId: string; id: string }) {
     };
   }, [projectId, id]);
 
-  if (doc === undefined) {
-    return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator />
-      </View>
-    );
-  }
-  if (!doc) {
-    return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-        <Text>This photo could not be opened.</Text>
-      </View>
-    );
-  }
+  if (doc === undefined) return <StatusView />;
+  if (!doc) return <StatusView message={PHOTO_UNAVAILABLE} />;
   return <EditorScreen initialDoc={doc} />;
 }

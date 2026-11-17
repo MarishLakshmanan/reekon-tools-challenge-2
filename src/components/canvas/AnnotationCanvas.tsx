@@ -1,12 +1,7 @@
-import {
-  Canvas,
-  Group,
-  Image,
-  matchFont,
-} from "@shopify/react-native-skia";
+import { Canvas, Group, Image } from "@shopify/react-native-skia";
 import type { SkImage } from "@shopify/react-native-skia";
 import { useEffect, useState } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import {
   GestureDetector,
   useExclusiveGestures,
@@ -18,10 +13,9 @@ import {
 import { useDerivedValue, useSharedValue, withTiming } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 
-import { MeasurementShape } from "@/components/canvas/MeasurementShape";
-import { PathShape } from "@/components/canvas/PathShape";
+import { AnnotationShapes } from "@/components/canvas/AnnotationShapes";
 import { SegmentHighlight } from "@/components/canvas/SegmentHighlight";
-import { TextShape } from "@/components/canvas/TextShape";
+import { systemFont } from "@/components/canvas/shared";
 import type { Tool } from "@/components/Toolbar";
 import { HIT_SLOP_PX, styleFor } from "@/utils/annotations/defaults";
 import type { DocAction } from "@/utils/annotations/docReducer";
@@ -68,12 +62,8 @@ export function AnnotationCanvas({
   const imageH = image.height();
   const [size, setSize] = useState({ width: 0, height: 0 });
   const fit = fitTransform(size.width || 1, size.height || 1, imageW, imageH);
-  const style = styleFor(imageW);
-  const fontSize = style.fontSize;
-  const font = matchFont({
-    fontFamily: Platform.select({ ios: "Helvetica", default: "sans-serif" }),
-    fontSize: style.fontSize,
-  });
+  const { fontSize } = styleFor(imageW);
+  const font = systemFont(fontSize);
 
   // Shared copies of what the gestures need, since they run on the UI thread.
   const docSV = useSharedValue(annotations);
@@ -198,7 +188,6 @@ export function AnnotationCanvas({
 
   const oneFinger = useExclusiveGestures(pan, doubleTap, tap);
   const gesture = useSimultaneousGestures(pinch, twoFingerPan, oneFinger);
-  const anchorsVisible = tool === "pen" || tool === "measure";
 
   return (
     <GestureDetector gesture={gesture}>
@@ -209,38 +198,15 @@ export function AnnotationCanvas({
         <Canvas style={styles.fill}>
           <Group transform={groupTransform}>
             <Image image={image} x={0} y={0} width={imageW} height={imageH} />
-            {annotations.map((a) => {
-              const selected = a.id === selection?.id;
-              if (a.kind === "path") {
-                return (
-                  <PathShape
-                    key={a.id}
-                    live={live}
-                    path={a}
-                    showAnchors={anchorsVisible || selected}
-                    selectedAnchorId={selected ? selection?.anchorId : undefined}
-                    pxToImage={pxToImage}
-                  />
-                );
-              }
-              if (a.kind === "measurement") {
-                // Unassigned measurements are only in the list.
-                if (a.pathId === null) return null;
-                return (
-                  <MeasurementShape
-                    key={a.id}
-                    live={live}
-                    measurement={a}
-                    font={font}
-                    fontSize={style.fontSize}
-                    strokeWidth={style.strokeWidth * 1.5}
-                    selected={selected}
-                    pxToImage={pxToImage}
-                  />
-                );
-              }
-              return <TextShape key={a.id} live={live} label={a} selected={selected} pxToImage={pxToImage} />;
-            })}
+            <AnnotationShapes
+              annotations={annotations}
+              live={live}
+              pxToImage={pxToImage}
+              imageWidth={imageW}
+              font={font}
+              selection={selection}
+              showAnchors={tool === "pen" || tool === "measure"}
+            />
             {highlight && <SegmentHighlight live={live} segment={highlight} pxToImage={pxToImage} />}
           </Group>
         </Canvas>

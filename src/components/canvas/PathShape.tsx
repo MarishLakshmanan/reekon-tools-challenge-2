@@ -3,9 +3,9 @@ import type { SharedValue } from "react-native-reanimated";
 import { useDerivedValue } from "react-native-reanimated";
 
 import { findAnchorPoint, findAnnotation, pathPoints } from "@/utils/annotations/geometry";
+import { HANDLE_RADIUS_PX, OFFSCREEN } from "@/components/canvas/shared";
 import type { Annotation, PenPath } from "@/utils/annotations/types";
-
-const OFFSCREEN = { x: -1e6, y: -1e6 };
+import { colors } from "@/utils/theme";
 
 function AnchorDot({
   live,
@@ -20,15 +20,13 @@ function AnchorDot({
   pxToImage: SharedValue<number>;
   highlighted: boolean;
 }) {
-  const radius = useDerivedValue(() => 7 * pxToImage.value);
-  const ring = useDerivedValue(() => (7 * pxToImage.value) / 3);
-  const center = useDerivedValue(() => {
-    return findAnchorPoint(live.value, pathId, anchorId) ?? OFFSCREEN;
-  });
+  const radius = useDerivedValue(() => HANDLE_RADIUS_PX * pxToImage.value);
+  const ring = useDerivedValue(() => radius.value / 3);
+  const center = useDerivedValue(() => findAnchorPoint(live.value, pathId, anchorId) ?? OFFSCREEN);
   return (
     <>
       <Circle c={center} r={radius} color="white" />
-      <Circle c={center} r={radius} color={highlighted ? "#ff9f0a" : "#0a84ff"} style="stroke" strokeWidth={ring} />
+      <Circle c={center} r={radius} color={highlighted ? colors.highlight : colors.tint} style="stroke" strokeWidth={ring} />
     </>
   );
 }

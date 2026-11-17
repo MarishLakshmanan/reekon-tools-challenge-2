@@ -3,6 +3,8 @@ import { z } from "zod";
 // Typed against the app's own types, so a change on either side fails typecheck.
 import type { Annotation } from "../../src/utils/annotations/types.ts";
 
+const id = z.string().regex(/^[a-z0-9]+$/);
+
 const point = z.object({ x: z.number(), y: z.number() });
 
 const penPath = z.object({
@@ -38,7 +40,7 @@ const textLabel = z.object({
   color: z.string(),
 });
 
-export const annotationsSchema: z.ZodType<Annotation[]> = z.array(
+const annotationsSchema: z.ZodType<Annotation[]> = z.array(
   z.union([penPath, measurement, textLabel]),
 );
 
@@ -48,7 +50,7 @@ export const updateSchema = z.object({
 });
 
 export const createSchema = z.object({
-  id: z.string().regex(/^[a-z0-9]+$/),
+  id,
   width: z.coerce.number().int().positive(),
   height: z.coerce.number().int().positive(),
   annotations: z.string().transform((s, ctx) => {
@@ -60,8 +62,6 @@ export const createSchema = z.object({
     }
   }).pipe(annotationsSchema),
 });
-
-const id = z.string().regex(/^[a-z0-9]+$/);
 
 export const signInSchema = z.object({
   email: z.string().trim().toLowerCase(),

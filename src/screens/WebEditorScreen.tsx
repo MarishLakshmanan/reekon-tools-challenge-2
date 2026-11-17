@@ -4,9 +4,10 @@ import { Stack } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
-import { request } from "@/api/client";
-import { ApiError, getRemote, updateDoc } from "@/api/documents";
+import { ApiError, request } from "@/api/client";
+import { getRemote, updateDoc } from "@/api/documents";
 import type { RemoteDoc } from "@/api/documents";
+import { PHOTO_UNAVAILABLE, StatusView } from "@/components/StatusView";
 import { WebCanvas } from "@/components/canvas/WebCanvas";
 import { MeasurementList } from "@/components/MeasurementList";
 import { MeasurementValueModal } from "@/components/MeasurementValueModal";
@@ -14,8 +15,7 @@ import { TextInputModal } from "@/components/TextInputModal";
 import { applyAction } from "@/utils/annotations/docReducer";
 import type { DocAction } from "@/utils/annotations/docReducer";
 import type { Measurement } from "@/utils/annotations/types";
-
-const MAX_WIDTH = 960;
+import { colors, MAX_CONTENT_WIDTH } from "@/utils/theme";
 
 /** Decodes the photo into a Skia image. It's fetched with the auth header, which Skia's `useImage` can't send. */
 async function loadImage(path: string): Promise<SkImage | null> {
@@ -24,9 +24,9 @@ async function loadImage(path: string): Promise<SkImage | null> {
 }
 
 /**
- * The web editor: view a document from the server and edit its measurement values and text labels.
- * Nothing is kept locally. Each edit is a PUT with the version it was made on; when another
- * device saved first, the server copy replaces the page and the edit is dropped.
+ * Shows a server document and edits its measurement values and text labels, keeping nothing locally.
+ * Each edit is a PUT with the version it was made on; if another device saved first, the edit is
+ * dropped and the server copy is shown.
  */
 export function WebEditorScreen({ id }: { id: string }) {
   const [doc, setDoc] = useState<RemoteDoc | null>(null);
@@ -76,26 +76,12 @@ export function WebEditorScreen({ id }: { id: string }) {
 
   const header = <Stack.Screen options={{ headerRight: () => (busy ? <ActivityIndicator /> : null) }} />;
 
-  if (failed) {
-    return (
-      <View style={styles.center}>
-        {header}
-        <Text>This photo could not be opened.</Text>
-      </View>
-    );
-  }
-  if (!doc || !image || !typeface) {
-    return (
-      <View style={styles.center}>
-        {header}
-        <ActivityIndicator />
-      </View>
-    );
-  }
+  if (failed) return <StatusView message={PHOTO_UNAVAILABLE}>{header}</StatusView>;
+  if (!doc || !image || !typeface) return <StatusView>{header}</StatusView>;
 
   const editing = doc.annotations.find((a) => a.id === editingId);
   const measurements = doc.annotations.filter((a): a is Measurement => a.kind === "measurement");
-  const width = Math.min(windowW, MAX_WIDTH);
+  const width = Math.min(windowW, MAX_CONTENT_WIDTH);
   const canvasHeight = Math.min((width * doc.image.height) / doc.image.width, windowH * 0.7);
   const edit = (targetId: string) => !busy && setEditingId(targetId);
 
@@ -143,9 +129,8 @@ export function WebEditorScreen({ id }: { id: string }) {
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, backgroundColor: "white" },
+  fill: { flex: 1, backgroundColor: colors.background },
   content: { alignItems: "center", paddingBottom: 24 },
   column: { gap: 12 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  notice: { marginHorizontal: 16, color: "#ff3b30" },
+  notice: { marginHorizontal: 16, color: colors.danger, backgroundColor: colors.dangerSoft, padding: 10, borderRadius: 8 },
 });

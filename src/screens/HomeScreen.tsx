@@ -1,15 +1,19 @@
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { Alert, FlatList, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { createProject, listProjects } from "@/api/projects";
 import type { Project } from "@/api/projects";
+import { Avatar } from "@/components/Avatar";
+import { Button } from "@/components/Button";
+import { EmptyState } from "@/components/EmptyState";
+import { Icon } from "@/components/Icon";
 import { TextInputModal } from "@/components/TextInputModal";
 import { useSession } from "@/hooks/useSession";
 import { hasUnsavedDocs, pruneLocalProjects } from "@/utils/annotations/storage";
+import { colors, radius, shadow, typography } from "@/utils/theme";
+import { isWeb } from "@/utils/platform";
 
-// The web only views projects, keeps no local photos, and has no settings.
-const isWeb = Platform.OS === "web";
 
 export function HomeScreen() {
   const router = useRouter();
@@ -21,7 +25,7 @@ export function HomeScreen() {
   const load = useCallback(async () => {
     try {
       const list = await listProjects();
-      // Projects that were deleted, or that this user was removed from, can't be saved to anymore.
+      // Drop local photos of projects that were deleted or that this user lost access to.
       if (!isWeb) pruneLocalProjects(list.map((p) => p.id));
       setProjects(list);
       setError(null);
@@ -72,12 +76,12 @@ export function HomeScreen() {
           headerRight: () => (
             <View style={styles.headerActions}>
               {!isWeb && (
-                <Pressable onPress={() => router.push("/settings")} hitSlop={8}>
-                  <Text style={styles.headerAction}>Settings</Text>
+                <Pressable onPress={() => router.push("/settings")} hitSlop={10} accessibilityLabel="Settings">
+                  <Icon name="settings" size={22} color={colors.tint} />
                 </Pressable>
               )}
-              <Pressable onPress={confirmSignOut} hitSlop={8}>
-                <Text style={styles.headerAction}>Sign out</Text>
+              <Pressable onPress={confirmSignOut} hitSlop={10} accessibilityLabel="Sign out">
+                <Icon name="signOut" size={22} color={colors.tint} />
               </Pressable>
             </View>
           ),
@@ -93,26 +97,45 @@ export function HomeScreen() {
         onRefresh={load}
         ListHeaderComponent={
           <View style={styles.header}>
-            <Text style={styles.user}>Signed in as {me?.user.name}</Text>
-            <Text style={styles.meta}>{me?.user.email}</Text>
-            {!isWeb && (
-              <Pressable style={styles.button} onPress={() => setNaming(true)}>
-                <Text style={styles.buttonText}>New project</Text>
-              </Pressable>
-            )}
+            <View style={styles.profile}>
+              <Avatar name={me?.user.name ?? "?"} size={48} />
+              <View style={styles.profileText}>
+                <Text style={typography.headline}>{me?.user.name}</Text>
+                <Text style={typography.caption}>{me?.user.email}</Text>
+              </View>
+            </View>
+            {!isWeb && <Button label="New project" icon="add" onPress={() => setNaming(true)} />}
+            <Text style={styles.sectionTitle}>Projects</Text>
           </View>
         }
-        ListEmptyComponent={<Text style={styles.empty}>{error ?? "No projects yet."}</Text>}
+        ListEmptyComponent={
+          <EmptyState
+            icon="folder"
+            title={error ?? "No projects yet"}
+            subtitle={error ? "Pull down to try again." : isWeb ? undefined : "Create one to start adding photos."}
+          />
+        }
         renderItem={({ item }) => (
-          <Pressable style={styles.card} onPress={() => router.push(`/projects/${item.id}`)}>
+          <Pressable
+            style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+            onPress={() => router.push(`/projects/${item.id}`)}
+          >
+            <View style={styles.folder}>
+              <Icon name="folder" size={22} color={colors.tint} />
+            </View>
             <View style={styles.cardText}>
-              <Text style={styles.name}>{item.name}</Text>
-              <Text style={styles.meta}>
+              <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
+              <Text style={typography.caption}>
                 {item.documentCount} {item.documentCount === 1 ? "photo" : "photos"} · {item.memberCount}{" "}
                 {item.memberCount === 1 ? "member" : "members"}
               </Text>
             </View>
-            {item.ownerId === me?.user.id && <Text style={styles.badge}>Owner</Text>}
+            {item.ownerId === me?.user.id && (
+              <View style={styles.pill}>
+                <Text style={styles.pillText}>Owner</Text>
+              </View>
+            )}
+            <Icon name="chevron" size={14} color={colors.tertiaryLabel} />
           </Pressable>
         )}
       />
@@ -129,26 +152,19 @@ export function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: 16, gap: 12 },
+  container: { flex: 1, backgroundColor: colors.background },
+  content: { padding: 16, gap: 10 },
   // The web header adds no inset of its own on the right.
-  headerActions: { flexDirection: "row", gap: 16, paddingRight: isWeb ? 16 : 0 },
-  headerAction: { color: "#0a84ff", fontSize: 16 },
-  header: { gap: 2, marginBottom: 4 },
-  user: { fontSize: 16, fontWeight: "600", color: "#111" },
-  button: { padding: 14, borderRadius: 10, backgroundColor: "#0a84ff", alignItems: "center", marginTop: 12 },
-  buttonText: { color: "white", fontWeight: "600" },
-  card: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 14,
-    borderRadius: 10,
-    backgroundColor: "#f2f2f7",
-    gap: 8,
-  },
+  headerActions: { flexDirection: "row", gap: 20, alignItems: "center", paddingRight: isWeb ? 16 : 0 },
+  header: { gap: 14, marginBottom: 4 },
+  profile: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.card, padding: 14, borderRadius: radius.lg, ...shadow },
+  profileText: { flex: 1, gap: 2 },
+  sectionTitle: { ...typography.section, marginTop: 6 },
+  card: { flexDirection: "row", alignItems: "center", padding: 14, borderRadius: radius.lg, backgroundColor: colors.card, gap: 12, ...shadow },
+  pressed: { opacity: 0.7 },
+  folder: { width: 42, height: 42, borderRadius: radius.md, backgroundColor: colors.tintSoft, alignItems: "center", justifyContent: "center" },
   cardText: { flex: 1, gap: 2 },
-  name: { fontSize: 16, fontWeight: "600", color: "#111" },
-  meta: { fontSize: 12, color: "#666" },
-  badge: { fontSize: 12, fontWeight: "600", color: "#0a84ff" },
-  empty: { textAlign: "center", color: "#888", marginTop: 40 },
+  name: { fontSize: 16, fontWeight: "600", color: colors.label },
+  pill: { backgroundColor: colors.tintSoft, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 3 },
+  pillText: { fontSize: 12, fontWeight: "600", color: colors.tint },
 });

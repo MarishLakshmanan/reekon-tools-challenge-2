@@ -1,18 +1,16 @@
 import { File, Paths } from "expo-file-system";
 import { createContext, use, useCallback, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Platform } from "react-native";
 
 import { DEFAULT_SETTINGS, parseSettings } from "@/utils/settings";
 import type { Settings } from "@/utils/settings";
+import { isWeb } from "@/utils/platform";
 
 type SettingsValue = {
   settings: Settings;
   update: (patch: Partial<Settings>) => void;
 };
 
-// The web has no file storage and creates no annotations, so it always uses the defaults.
-const isWeb = Platform.OS === "web";
 
 // Outside `docs/`, so signing out (which clears `docs/`) keeps it.
 const settingsFile = () => new File(Paths.document, "settings.json");

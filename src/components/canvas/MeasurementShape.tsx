@@ -3,10 +3,11 @@ import type { SkFont } from "@shopify/react-native-skia";
 import type { SharedValue } from "react-native-reanimated";
 import { useDerivedValue } from "react-native-reanimated";
 
-import { findAnnotation, measurementLabel, measurementLayout } from "@/utils/annotations/geometry";
+import { HANDLE_RADIUS_PX, OFFSCREEN } from "@/components/canvas/shared";
+import { findAnnotation, measurementLayout } from "@/utils/annotations/geometry";
+import { formatMeasurement } from "@/utils/annotations/measurements";
 import type { Annotation, Measurement } from "@/utils/annotations/types";
-
-const OFFSCREEN = { x: -1e6, y: -1e6 };
+import { colors } from "@/utils/theme";
 
 export function MeasurementShape({
   live,
@@ -25,7 +26,7 @@ export function MeasurementShape({
   selected: boolean;
   pxToImage: SharedValue<number>;
 }) {
-  const handleRadius = useDerivedValue(() => 7 * pxToImage.value);
+  const handleRadius = useDerivedValue(() => HANDLE_RADIUS_PX * pxToImage.value);
   const layout = useDerivedValue(() => {
     const current = findAnnotation(live.value, measurement.id);
     const out =
@@ -42,10 +43,10 @@ export function MeasurementShape({
   return (
     <>
       <Line p1={p1} p2={p2} color={measurement.color} strokeWidth={strokeWidth} />
-      <Text x={labelX} y={labelY} text={measurementLabel(measurement)} font={font} color={measurement.color} />
+      <Text x={labelX} y={labelY} text={formatMeasurement(measurement.value, measurement.unit)} font={font} color={measurement.color} />
       {selected &&
         [p1, p2].map((c, i) => (
-          <Circle key={i} c={c} r={handleRadius} color="#ff9f0a" />
+          <Circle key={i} c={c} r={handleRadius} color={colors.highlight} />
         ))}
     </>
   );

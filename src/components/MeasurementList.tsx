@@ -1,11 +1,12 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { colors, radius, shadow, typography } from "@/utils/theme";
 import { formatMeasurement } from "@/utils/annotations/measurements";
 import type { Measurement } from "@/utils/annotations/types";
 
-/** Fixed colors: blue for measurements on a segment, orange for unassigned ones. */
-const LINKED = "#0a84ff";
-const UNASSIGNED = "#ff9f0a";
+/** Blue for measurements on a segment, orange for unassigned ones; the same colours as on the photo. */
+const LINKED_COLOR = colors.tint;
+const UNASSIGNED_COLOR = colors.highlight;
 
 /** Side of a square card. Fixed, because `aspectRatio` is ignored in a wrapping row on Android. */
 const CARD_SIZE = 110;
@@ -35,7 +36,7 @@ export function MeasurementList({
       {linking && <Text style={styles.hint}>{hint}</Text>}
       {measurements.length === 0 && !linking && <Text style={styles.empty}>No measurements yet</Text>}
       {[...linked, ...unassigned].map((m) => {
-        const color = m.pathId === null ? UNASSIGNED : LINKED;
+        const color = m.pathId === null ? UNASSIGNED_COLOR : LINKED_COLOR;
         const target = linking && m.pathId === null;
         return (
           <Pressable
@@ -45,7 +46,7 @@ export function MeasurementList({
           >
             <Text style={styles.value}>{formatMeasurement(m.value, m.unit)}</Text>
             {onRemove && (
-              <Pressable style={styles.removeButton} onPress={() => onRemove(m)} hitSlop={10} accessibilityLabel={`Remove ${formatMeasurement(m.value, m.unit)}`}>
+              <Pressable style={styles.removeButton} onPress={() => onRemove(m)} hitSlop={6} accessibilityLabel={`Remove ${formatMeasurement(m.value, m.unit)}`}>
                 <Text style={styles.remove}>×</Text>
               </Pressable>
             )}
@@ -57,22 +58,23 @@ export function MeasurementList({
 }
 
 const styles = StyleSheet.create({
-  grid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 12, gap: 8 },
+  grid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 12, gap: 10 },
   // Full-width rows inside the wrapping grid.
-  empty: { width: "100%", color: "#666", textAlign: "center", paddingVertical: 16 },
-  hint: { width: "100%", color: "#ff9f0a", fontWeight: "600", textAlign: "center", paddingVertical: 4 },
+  empty: { width: "100%", ...typography.caption, fontSize: 14, textAlign: "center", paddingVertical: 16 },
+  hint: { width: "100%", color: UNASSIGNED_COLOR, fontWeight: "600", textAlign: "center", paddingVertical: 4 },
   // Squares; the color bar is on the top edge.
   card: {
     width: CARD_SIZE,
     height: CARD_SIZE,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 8,
+    borderRadius: radius.md,
     borderTopWidth: 6,
-    backgroundColor: "#f2f2f7",
+    backgroundColor: colors.card,
+    ...shadow,
   },
-  target: { backgroundColor: "#fff4e5" },
-  value: { fontSize: 16, fontWeight: "600", color: "#111" },
-  removeButton: { position: "absolute", top: 2, right: 4 },
-  remove: { fontSize: 22, lineHeight: 22, color: "#8e8e93", paddingHorizontal: 4 },
+  target: { backgroundColor: colors.warningSoft },
+  value: { fontSize: 18, fontWeight: "700", color: colors.label },
+  removeButton: { position: "absolute", top: 0, right: 0, padding: 6 },
+  remove: { fontSize: 22, lineHeight: 22, color: colors.tertiaryLabel, paddingHorizontal: 4 },
 });

@@ -1,12 +1,16 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+
+import { Button } from "@/components/Button";
+import type { IconName } from "@/components/Icon";
+import { Segmented } from "@/components/Segmented";
 
 export type Tool = "select" | "pen" | "measure" | "text";
 
-const TOOLS: { id: Tool; label: string }[] = [
-  { id: "select", label: "Select" },
-  { id: "pen", label: "Pen" },
-  { id: "measure", label: "Measure" },
-  { id: "text", label: "Text" },
+const TOOLS: { id: Tool; label: string; icon: IconName }[] = [
+  { id: "select", label: "Select", icon: "select" },
+  { id: "pen", label: "Pen", icon: "pen" },
+  { id: "measure", label: "Measure", icon: "measure" },
+  { id: "text", label: "Text", icon: "text" },
 ];
 
 export function Toolbar({
@@ -27,30 +31,12 @@ export function Toolbar({
 }) {
   return (
     <View style={styles.bar}>
-      <View style={styles.row}>
-        {TOOLS.map((t) => (
-          <Pressable key={t.id} style={[styles.tool, tool === t.id && styles.active]} onPress={() => onToolChange(t.id)}>
-            <Text style={[styles.label, tool === t.id && styles.activeLabel]}>{t.label}</Text>
-          </Pressable>
-        ))}
-      </View>
+      <Segmented options={TOOLS} value={tool} onChange={onToolChange} />
       {(onFinishPath || onDelete || onUndo) && (
         <View style={styles.row}>
-          {onUndo && (
-            <Pressable style={[styles.action, styles.undo]} onPress={onUndo}>
-              <Text style={styles.actionLabel}>Undo</Text>
-            </Pressable>
-          )}
-          {onFinishPath && (
-            <Pressable style={styles.action} onPress={onFinishPath}>
-              <Text style={styles.actionLabel}>Done</Text>
-            </Pressable>
-          )}
-          {onDelete && (
-            <Pressable style={[styles.action, styles.danger]} onPress={onDelete}>
-              <Text style={styles.actionLabel}>Delete</Text>
-            </Pressable>
-          )}
+          {onUndo && <Button label="Undo" icon="undo" variant="secondary" onPress={onUndo} style={styles.action} />}
+          {onFinishPath && <Button label="Done" icon="done" onPress={onFinishPath} style={styles.action} />}
+          {onDelete && <Button label="Delete" icon="trash" variant="danger" onPress={onDelete} style={styles.action} />}
         </View>
       )}
     </View>
@@ -58,14 +44,7 @@ export function Toolbar({
 }
 
 const styles = StyleSheet.create({
-  bar: { paddingVertical: 8, paddingHorizontal: 12, gap: 8 },
+  bar: { paddingHorizontal: 12, gap: 8 },
   row: { flexDirection: "row", gap: 8 },
-  tool: { flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: "center", backgroundColor: "#e5e5ea" },
-  active: { backgroundColor: "#0a84ff" },
-  label: { color: "#111", fontWeight: "500" },
-  activeLabel: { color: "white" },
-  action: { flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: "center", backgroundColor: "#34c759" },
-  danger: { backgroundColor: "#ff3b30" },
-  undo: { backgroundColor: "#8e8e93" },
-  actionLabel: { color: "white", fontWeight: "600" },
+  action: { flex: 1, minHeight: 44 },
 });

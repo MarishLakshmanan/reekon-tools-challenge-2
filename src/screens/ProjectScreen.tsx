@@ -2,7 +2,7 @@ import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { Alert, FlatList, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { ApiError, authHeaders } from "@/api/client";
 import { listRemote } from "@/api/documents";
@@ -10,15 +10,19 @@ import type { RemoteSummary } from "@/api/documents";
 import { deleteProject, getProject } from "@/api/projects";
 import type { ProjectDetail } from "@/api/projects";
 import { syncWithServer } from "@/api/sync";
+import { Avatar } from "@/components/Avatar";
+import { Button } from "@/components/Button";
+import { EmptyState } from "@/components/EmptyState";
+import { Icon } from "@/components/Icon";
 import { MembersModal } from "@/components/MembersModal";
 import { ServerImage } from "@/components/ServerImage";
 import { useSession } from "@/hooks/useSession";
 import { createDoc, deleteLocalProject, imageUriFor, listDocs } from "@/utils/annotations/storage";
 import { hasUnsavedChanges } from "@/utils/annotations/sync";
 import type { AnnotationDoc } from "@/utils/annotations/types";
+import { colors, radius, shadow, typography } from "@/utils/theme";
+import { isWeb } from "@/utils/platform";
 
-// The web only views: documents come straight from the server, and nothing is added, deleted or managed.
-const isWeb = Platform.OS === "web";
 
 export function ProjectScreen({ projectId }: { projectId: string }) {
   const router = useRouter();
@@ -104,8 +108,8 @@ export function ProjectScreen({ projectId }: { projectId: string }) {
           title: project?.name ?? "Project",
           headerRight: isOwner
             ? () => (
-                <Pressable onPress={confirmDelete} hitSlop={8}>
-                  <Text style={styles.danger}>Delete</Text>
+                <Pressable onPress={confirmDelete} hitSlop={10} accessibilityLabel="Delete project">
+                  <Icon name="trash" size={22} color={colors.danger} />
                 </Pressable>
               )
             : undefined,
@@ -123,31 +127,40 @@ export function ProjectScreen({ projectId }: { projectId: string }) {
           <View style={styles.header}>
             {!isWeb && (
               <View style={styles.actions}>
-                <Pressable style={styles.button} onPress={() => router.push(`/projects/${projectId}/camera`)}>
-                  <Text style={styles.buttonText}>Take photo</Text>
-                </Pressable>
-                <Pressable style={[styles.button, styles.secondary]} onPress={pickPhoto}>
-                  <Text style={[styles.buttonText, styles.secondaryText]}>Pick photo</Text>
-                </Pressable>
+                <Button label="Take photo" icon="camera" onPress={() => router.push(`/projects/${projectId}/camera`)} style={styles.action} />
+                <Button label="Pick photo" icon="photos" variant="secondary" onPress={pickPhoto} style={styles.action} />
               </View>
             )}
             {project && (
               <View style={styles.members}>
+                <View style={styles.avatars}>
+                  {project.members.slice(0, 5).map((m, i) => (
+                    <View key={m.id} style={i > 0 && styles.overlap}>
+                      <Avatar name={m.name} size={32} />
+                    </View>
+                  ))}
+                </View>
                 <Text style={styles.membersText} numberOfLines={2}>
-                  Members: {project.members.map((m) => m.name).join(", ")}
+                  {project.members.map((m) => m.name).join(", ")}
                 </Text>
                 {isOwner && (
                   <Pressable onPress={() => setManaging(true)} hitSlop={8}>
-                    <Text style={styles.link}>Members</Text>
+                    <Text style={styles.link}>Manage</Text>
                   </Pressable>
                 )}
               </View>
             )}
+            {docs.length > 0 && <Text style={typography.section}>Photos</Text>}
           </View>
         }
-        ListEmptyComponent={<Text style={styles.empty}>No photos yet.</Text>}
+        ListEmptyComponent={
+          <EmptyState icon="photos" title="No photos yet" subtitle={isWeb ? undefined : "Take or pick a photo to annotate."} />
+        }
         renderItem={({ item }) => (
-          <Pressable style={styles.card} onPress={() => router.push(`/projects/${projectId}/editor/${item.id}`)}>
+          <Pressable
+            style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+            onPress={() => router.push(`/projects/${projectId}/editor/${item.id}`)}
+          >
             {/* A server summary (web) has no annotations; a local document (phone) does. */}
             {"annotations" in item ? (
               <>
@@ -157,7 +170,9 @@ export function ProjectScreen({ projectId }: { projectId: string }) {
                   contentFit="cover"
                 />
                 <View style={styles.captionRow}>
-                  <Text style={styles.caption}>{item.annotations.length} annotations</Text>
+                  <Text style={styles.caption}>
+                    {item.annotations.length} {item.annotations.length === 1 ? "annotation" : "annotations"}
+                  </Text>
                   {conflicts.has(item.id) ? (
                     <Text style={[styles.badge, styles.conflict]}>Conflict</Text>
                   ) : (
@@ -186,24 +201,22 @@ export function ProjectScreen({ projectId }: { projectId: string }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: colors.background },
   content: { padding: 16 },
-  header: { marginBottom: 16, gap: 12 },
+  header: { marginBottom: 12, gap: 14 },
   actions: { flexDirection: "row", gap: 12 },
-  button: { flex: 1, padding: 14, borderRadius: 10, backgroundColor: "#0a84ff", alignItems: "center" },
-  buttonText: { color: "white", fontWeight: "600" },
-  secondary: { backgroundColor: "#e5e5ea" },
-  secondaryText: { color: "#111" },
-  members: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
-  membersText: { flex: 1, fontSize: 12, color: "#666" },
-  link: { color: "#0a84ff", fontSize: 14 },
-  danger: { color: "#ff3b30", fontSize: 16 },
+  action: { flex: 1 },
+  members: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.card, padding: 12, borderRadius: radius.lg, ...shadow },
+  avatars: { flexDirection: "row" },
+  overlap: { marginLeft: -10 },
+  membersText: { flex: 1, ...typography.caption, fontSize: 13 },
+  link: { color: colors.tint, fontSize: 14, fontWeight: "600" },
   row: { gap: 12, marginBottom: 12 },
-  card: { flex: 1 },
-  thumb: { aspectRatio: 1, borderRadius: 10, backgroundColor: "#ddd" },
-  captionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 4 },
-  caption: { fontSize: 12, color: "#666" },
-  badge: { fontSize: 12, fontWeight: "600", color: "#ff9500" },
-  conflict: { color: "#ff3b30" },
-  empty: { textAlign: "center", color: "#888", marginTop: 40 },
+  card: { flex: 1, backgroundColor: colors.card, borderRadius: radius.lg, padding: 6, ...shadow },
+  pressed: { opacity: 0.7 },
+  thumb: { aspectRatio: 1, borderRadius: radius.md, backgroundColor: colors.fill },
+  captionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 4, paddingTop: 6, paddingBottom: 2 },
+  caption: typography.caption,
+  badge: { fontSize: 11, fontWeight: "700", color: colors.warning },
+  conflict: { color: colors.danger },
 });

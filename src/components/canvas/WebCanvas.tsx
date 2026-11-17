@@ -5,9 +5,7 @@ import type { ComponentRef } from "react";
 import { StyleSheet, View } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
 
-import { MeasurementShape } from "@/components/canvas/MeasurementShape";
-import { PathShape } from "@/components/canvas/PathShape";
-import { TextShape } from "@/components/canvas/TextShape";
+import { AnnotationShapes } from "@/components/canvas/AnnotationShapes";
 import { HIT_SLOP_PX, styleFor } from "@/utils/annotations/defaults";
 import type { Camera } from "@/utils/annotations/geometry";
 import {
@@ -45,8 +43,8 @@ export function WebCanvas({
 }) {
   const imageW = image.width();
   const imageH = image.height();
-  const style = styleFor(imageW);
-  const font = Skia.Font(typeface, style.fontSize);
+  const { fontSize } = styleFor(imageW);
+  const font = Skia.Font(typeface, fontSize);
 
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [camera, setCamera] = useState<Camera>(IDENTITY_CAMERA);
@@ -114,7 +112,7 @@ export function WebCanvas({
       if (!wasClick) return;
       const { view: v, annotations: list, onPick: pick } = latest.current;
       const { x, y } = local(e);
-      const hit = hitTest(toImagePoint(x, y, v), list, HIT_SLOP_PX / v.scale, style.fontSize);
+      const hit = hitTest(toImagePoint(x, y, v), list, HIT_SLOP_PX / v.scale, fontSize);
       const target = hit && list.find((a) => a.id === hit.id);
       if (target && (target.kind === "measurement" || target.kind === "text")) pick(target.id);
     }
@@ -131,7 +129,7 @@ export function WebCanvas({
       el.removeEventListener("pointerup", onPointerUp);
       el.removeEventListener("pointercancel", onPointerUp);
     };
-  }, [imageW, imageH, style.fontSize]);
+  }, [imageW, imageH, fontSize]);
 
   const transform = [{ translateX: view.tx }, { translateY: view.ty }, { scale: view.scale }];
 
@@ -148,30 +146,14 @@ export function WebCanvas({
       <Canvas style={styles.fill}>
         <Group transform={transform}>
           <Image image={image} x={0} y={0} width={imageW} height={imageH} />
-          {annotations.map((a) => {
-            if (a.kind === "path") {
-              return <PathShape key={a.id} live={live} path={a} showAnchors={false} pxToImage={pxToImage} />;
-            }
-            if (a.kind === "measurement") {
-              // Unassigned measurements are only in the list.
-              if (a.pathId === null) return null;
-              return (
-                <MeasurementShape
-                  key={a.id}
-                  live={live}
-                  measurement={a}
-                  font={font}
-                  fontSize={style.fontSize}
-                  strokeWidth={style.strokeWidth * 1.5}
-                  selected={false}
-                  pxToImage={pxToImage}
-                />
-              );
-            }
-            return (
-              <TextShape key={a.id} live={live} label={a} selected={false} pxToImage={pxToImage} typeface={typeface} />
-            );
-          })}
+          <AnnotationShapes
+            annotations={annotations}
+            live={live}
+            pxToImage={pxToImage}
+            imageWidth={imageW}
+            font={font}
+            typeface={typeface}
+          />
         </Group>
       </Canvas>
     </View>

@@ -1,3 +1,5 @@
+import { isOnSegment } from "./geometry";
+import { UNASSIGNED } from "./measurements";
 import type { Annotation, AnnotationDoc, MeasurementUnit, PenPath, Point, Segment } from "./types";
 
 export type DocAction =
@@ -19,17 +21,9 @@ function unassignAttached(list: Annotation[], pathId: string, anchorId?: string)
     a.kind === "measurement" &&
     a.pathId === pathId &&
     (anchorId === undefined || a.startAnchorId === anchorId || a.endAnchorId === anchorId)
-      ? { ...a, pathId: null, startAnchorId: null, endAnchorId: null }
+      ? { ...a, ...UNASSIGNED }
       : a,
   );
-}
-
-function onSegment(a: Annotation, seg: Segment): boolean {
-  "worklet";
-  if (a.kind !== "measurement" || a.pathId !== seg.pathId) return false;
-  const same = a.startAnchorId === seg.startAnchorId && a.endAnchorId === seg.endAnchorId;
-  const flipped = a.startAnchorId === seg.endAnchorId && a.endAnchorId === seg.startAnchorId;
-  return same || flipped;
 }
 
 function mapPath(list: Annotation[], id: string, fn: (p: PenPath) => PenPath): Annotation[] {
@@ -69,7 +63,7 @@ export function applyAction(list: Annotation[], action: DocAction): Annotation[]
     case "updateText":
       return list.map((a) => (a.kind === "text" && a.id === action.id ? { ...a, text: action.text } : a));
     case "linkMeasurement": {
-      if (list.some((a) => onSegment(a, action.segment))) return list;
+      if (list.some((a) => isOnSegment(a, action.segment))) return list;
       const { pathId, startAnchorId, endAnchorId } = action.segment;
       return list.map((a) =>
         a.kind === "measurement" && a.id === action.id && a.pathId === null
@@ -103,7 +97,7 @@ export function applyAction(list: Annotation[], action: DocAction): Annotation[]
  * A Save finished. `savedAt` is the `updatedAt` that was sent, so edits made during the request stay unsaved.
  * `imageUri` is the server URL, given after the first upload.
  */
-export type SavedAction = { type: "markSaved"; serverVersion: number; savedAt: number; imageUri?: string };
+type SavedAction = { type: "markSaved"; serverVersion: number; savedAt: number; imageUri?: string };
 
 export function docReducer(doc: AnnotationDoc, action: DocAction | SavedAction): AnnotationDoc {
   if (action.type === "markSaved") {
@@ -121,7 +115,7 @@ export const UNDO_LIMIT = 5;
 /** The editor's document plus earlier `annotations` arrays for Undo. History is in memory only. */
 export type EditorState = { doc: AnnotationDoc; past: Annotation[][] };
 
-export type UndoAction = { type: "undo" };
+type UndoAction = { type: "undo" };
 
 /**
  * `docReducer` with Undo. Each edit that changes annotations records the previous array (last {@link UNDO_LIMIT}).

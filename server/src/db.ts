@@ -23,7 +23,7 @@ export type UserRow = {
   passwordHash: string;
 };
 
-export type OrgRow = { id: string; name: string };
+type OrgRow = { id: string; name: string };
 
 export type ProjectRow = {
   id: string;
@@ -33,7 +33,7 @@ export type ProjectRow = {
   createdAt: number;
 };
 
-export type ProjectSummary = ProjectRow & { memberCount: number; documentCount: number };
+type ProjectSummary = ProjectRow & { memberCount: number; documentCount: number };
 
 type SqlDocument = {
   id: string;
@@ -52,7 +52,7 @@ type SqlUser = { id: string; org_id: string; email: string; name: string; passwo
 type SqlProject = { id: string; org_id: string; owner_id: string; name: string; created_at: number };
 type SqlProjectSummary = SqlProject & { member_count: number; document_count: number };
 
-function toDocument(row: SqlDocument): DocumentRow {
+function documentFromSql(row: SqlDocument): DocumentRow {
   return {
     id: row.id,
     projectId: row.project_id,
@@ -67,11 +67,11 @@ function toDocument(row: SqlDocument): DocumentRow {
   };
 }
 
-function toUser(row: SqlUser): UserRow {
+function userFromSql(row: SqlUser): UserRow {
   return { id: row.id, orgId: row.org_id, email: row.email, name: row.name, passwordHash: row.password_hash };
 }
 
-function toProject(row: SqlProject): ProjectRow {
+function projectFromSql(row: SqlProject): ProjectRow {
   return { id: row.id, orgId: row.org_id, ownerId: row.owner_id, name: row.name, createdAt: row.created_at };
 }
 
@@ -204,14 +204,14 @@ export function openDb(path: string) {
     },
     getUserByEmail(email: string): UserRow | undefined {
       const row = q.userByEmail.get(email) as SqlUser | undefined;
-      return row && toUser(row);
+      return row && userFromSql(row);
     },
     getUser(id: string): UserRow | undefined {
       const row = q.userById.get(id) as SqlUser | undefined;
-      return row && toUser(row);
+      return row && userFromSql(row);
     },
     listOrgUsers(orgId: string): UserRow[] {
-      return (q.usersInOrg.all(orgId) as SqlUser[]).map(toUser);
+      return (q.usersInOrg.all(orgId) as SqlUser[]).map(userFromSql);
     },
 
     // Sessions.
@@ -221,7 +221,7 @@ export function openDb(path: string) {
     /** The signed-in user, or undefined for an unknown or expired token. */
     getSessionUser(token: string, now: number): UserRow | undefined {
       const row = q.sessionUser.get(token, now) as SqlUser | undefined;
-      return row && toUser(row);
+      return row && userFromSql(row);
     },
     deleteSession(token: string): void {
       q.deleteSession.run(token);
@@ -246,17 +246,17 @@ export function openDb(path: string) {
     },
     getProject(id: string): ProjectRow | undefined {
       const row = q.projectById.get(id) as SqlProject | undefined;
-      return row && toProject(row);
+      return row && projectFromSql(row);
     },
     listProjectsForUser(userId: string): ProjectSummary[] {
       return (q.projectsForUser.all(userId) as SqlProjectSummary[]).map((row) => ({
-        ...toProject(row),
+        ...projectFromSql(row),
         memberCount: row.member_count,
         documentCount: row.document_count,
       }));
     },
     listMembers(projectId: string): UserRow[] {
-      return (q.membersOf.all(projectId) as SqlUser[]).map(toUser);
+      return (q.membersOf.all(projectId) as SqlUser[]).map(userFromSql);
     },
     isMember(projectId: string, userId: string): boolean {
       return q.isMember.get(projectId, userId) !== undefined;
@@ -273,14 +273,14 @@ export function openDb(path: string) {
     // Documents.
     getDocument(id: string): DocumentRow | undefined {
       const row = q.docOne.get(id) as SqlDocument | undefined;
-      return row && toDocument(row);
+      return row && documentFromSql(row);
     },
     getDocumentByImage(imagePath: string): DocumentRow | undefined {
       const row = q.docByImage.get(imagePath) as SqlDocument | undefined;
-      return row && toDocument(row);
+      return row && documentFromSql(row);
     },
     listDocuments(projectId: string): DocumentRow[] {
-      return (q.docsInProject.all(projectId) as SqlDocument[]).map(toDocument);
+      return (q.docsInProject.all(projectId) as SqlDocument[]).map(documentFromSql);
     },
     insertDocument(doc: Omit<DocumentRow, "version" | "createdAt" | "updatedAt">, now: number): void {
       q.insertDoc.run(
@@ -299,8 +299,8 @@ export function openDb(path: string) {
     updateDocument(id: string, annotations: Annotation[], version: number, now: number): boolean {
       return q.updateDoc.run(JSON.stringify(annotations), now, id, version).changes === 1;
     },
-    deleteDocument(id: string): boolean {
-      return q.deleteDoc.run(id).changes === 1;
+    deleteDocument(id: string): void {
+      q.deleteDoc.run(id);
     },
     close(): void {
       db.close();

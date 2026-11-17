@@ -3,6 +3,7 @@ import { basename, join } from "node:path";
 
 import express from "express";
 import type { ErrorRequestHandler, Request, RequestHandler, Response } from "express";
+import type { z } from "zod";
 import multer from "multer";
 
 import { currentUser, newToken, requireUser, SESSION_MS, verifyPassword } from "./auth.ts";
@@ -52,6 +53,21 @@ const toProject = (p: ProjectRow) => ({ id: p.id, name: p.name, ownerId: p.owner
 
 const notFound = (res: Response) => res.status(404).json({ error: "not found" });
 
+/** The parsed body, or undefined after answering 400. */
+function parseBody<T>(schema: z.ZodType<T>, req: Request, res: Response): T | undefined {
+  const body = schema.safeParse(req.body);
+  if (body.success) return body.data;
+  res.status(400).json({ error: body.error.issues });
+  return undefined;
+}
+
+/** True for the project's owner; anyone else gets a 403 saying only the owner may `action`. */
+function isOwner(project: ProjectRow, res: Response, action: string): boolean {
+  if (project.ownerId === currentUser(res).id) return true;
+  res.status(403).json({ error: `only the owner can ${action}` });
+  return false;
+}
+
 /** Builds the API without listening, so tests can run it on a random port. */
 export function createApp({ db, uploadsDir }: { db: Db; uploadsDir: string }) {
   const app = express();
@@ -84,16 +100,16 @@ export function createApp({ db, uploadsDir }: { db: Db; uploadsDir: string }) {
   }
 
   app.post("/auth/sign-in", express.json(), (req, res) => {
-    const body = signInSchema.safeParse(req.body);
-    if (!body.success) return res.status(400).json({ error: body.error.issues });
-    const user = db.getUserByEmail(body.data.email);
+    const body = parseBody(signInSchema, req, res);
+    if (!body) return;
+    const user = db.getUserByEmail(body.email);
     // One message for both failures, so the response doesn't reveal which emails exist.
-    if (!user || !verifyPassword(body.data.password, user.passwordHash)) {
+    if (!user || !verifyPassword(body.password, user.passwordHash)) {
       return res.status(401).json({ error: "wrong email or password" });
     }
     const token = newToken();
     db.createSession(token, user.id, Date.now() + SESSION_MS);
-    res.json({ token, user: toPublicUser(user) });
+    res.json({ token });
   });
 
   app.use(requireUser(db));
@@ -123,17 +139,17 @@ export function createApp({ db, uploadsDir }: { db: Db; uploadsDir: string }) {
   });
 
   app.post("/projects", express.json(), (req, res) => {
-    const body = createProjectSchema.safeParse(req.body);
-    if (!body.success) return res.status(400).json({ error: body.error.issues });
+    const body = parseBody(createProjectSchema, req, res);
+    if (!body) return;
     const user = currentUser(res);
     // A retried create returns the project the first attempt made.
-    const existing = db.getProject(body.data.id);
+    const existing = db.getProject(body.id);
     if (existing) {
       if (existing.ownerId !== user.id) return res.status(409).json({ error: "id already in use" });
       return res.status(200).json(toProject(existing));
     }
-    db.createProject({ id: body.data.id, orgId: user.orgId, ownerId: user.id, name: body.data.name }, Date.now());
-    res.status(201).json(toProject(db.getProject(body.data.id)!));
+    db.createProject({ id: body.id, orgId: user.orgId, ownerId: user.id, name: body.name }, Date.now());
+    res.status(201).json(toProject(db.getProject(body.id)!));
   });
 
   app.get("/projects/:id", (req, res) => {
@@ -145,10 +161,10 @@ export function createApp({ db, uploadsDir }: { db: Db; uploadsDir: string }) {
   app.post("/projects/:id/members", express.json(), (req, res) => {
     const project = memberProject(req, res);
     if (!project) return;
-    if (project.ownerId !== currentUser(res).id) return res.status(403).json({ error: "only the owner can add members" });
-    const body = addMemberSchema.safeParse(req.body);
-    if (!body.success) return res.status(400).json({ error: body.error.issues });
-    const target = db.getUser(body.data.userId);
+    if (!isOwner(project, res, "add members")) return;
+    const body = parseBody(addMemberSchema, req, res);
+    if (!body) return;
+    const target = db.getUser(body.userId);
     if (!target || target.orgId !== project.orgId) return res.status(400).json({ error: "not a user in this organization" });
     const added = db.addMember(project.id, target.id, Date.now());
     res.status(added ? 201 : 200).json(toPublicUser(target));
@@ -157,7 +173,7 @@ export function createApp({ db, uploadsDir }: { db: Db; uploadsDir: string }) {
   app.delete("/projects/:id", async (req, res) => {
     const project = memberProject(req, res);
     if (!project) return;
-    if (project.ownerId !== currentUser(res).id) return res.status(403).json({ error: "only the owner can delete the project" });
+    if (!isOwner(project, res, "delete the project")) return;
     // Read the files first: the cascade removes the rows that point to them.
     const docs = db.listDocuments(project.id);
     db.deleteProject(project.id);
@@ -168,7 +184,7 @@ export function createApp({ db, uploadsDir }: { db: Db; uploadsDir: string }) {
   app.delete("/projects/:id/members/:userId", (req, res) => {
     const project = memberProject(req, res);
     if (!project) return;
-    if (project.ownerId !== currentUser(res).id) return res.status(403).json({ error: "only the owner can remove members" });
+    if (!isOwner(project, res, "remove members")) return;
     if (req.params.userId === project.ownerId) return res.status(400).json({ error: "the owner can't be removed" });
     if (!db.removeMember(project.id, String(req.params.userId))) return notFound(res);
     res.status(204).end();
@@ -177,39 +193,44 @@ export function createApp({ db, uploadsDir }: { db: Db; uploadsDir: string }) {
   app.get("/projects/:id/documents", (req, res) => {
     const project = memberProject(req, res);
     if (!project) return;
-    res.json(db.listDocuments(project.id).map((row) => toSummary(row)));
+    res.json(db.listDocuments(project.id).map(toSummary));
   });
 
   app.post("/projects/:id/documents", upload.single("image"), async (req, res) => {
     const project = memberProject(req, res);
     if (!project) return;
-    const body = createSchema.safeParse(req.body);
-    if (!body.success) return res.status(400).json({ error: body.error.issues });
+    const body = parseBody(createSchema, req, res);
+    if (!body) return;
     if (!req.file) return res.status(400).json({ error: "image is required" });
 
-    // A retried upload returns the copy the first attempt created. Checked again after
-    // the file write, with no await before the insert, so overlapping retries can't both insert.
-    // Another project's document with this id is treated as taken, never returned.
-    const taken = (existing: DocumentRow | undefined) =>
-      existing && (existing.projectId === project.id ? res.status(200).json(toDocument(existing)) : res.status(409).json({ error: "id already in use" }));
-    if (taken(db.getDocument(body.data.id))) return;
+    // A retried upload gets the copy the first attempt created; another project's document
+    // with this id is treated as taken, never returned. Checked again after the file write,
+    // with no await before the insert, so overlapping retries can't both insert.
+    const answeredExisting = () => {
+      const existing = db.getDocument(body.id);
+      if (!existing) return false;
+      if (existing.projectId === project.id) res.status(200).json(toDocument(existing));
+      else res.status(409).json({ error: "id already in use" });
+      return true;
+    };
+    if (answeredExisting()) return;
 
-    const imagePath = `uploads/${body.data.id}.jpg`;
+    const imagePath = `uploads/${body.id}.jpg`;
     await writeFile(join(uploadsDir, basename(imagePath)), req.file.buffer);
-    if (taken(db.getDocument(body.data.id))) return;
+    if (answeredExisting()) return;
     db.insertDocument(
       {
-        id: body.data.id,
+        id: body.id,
         projectId: project.id,
         createdBy: currentUser(res).id,
         imagePath,
-        imageWidth: body.data.width,
-        imageHeight: body.data.height,
-        annotations: body.data.annotations,
+        imageWidth: body.width,
+        imageHeight: body.height,
+        annotations: body.annotations,
       },
       Date.now(),
     );
-    res.status(201).json(toDocument(db.getDocument(body.data.id)!));
+    res.status(201).json(toDocument(db.getDocument(body.id)!));
   });
 
   app.get("/documents/:id", (req, res) => {
@@ -218,16 +239,16 @@ export function createApp({ db, uploadsDir }: { db: Db; uploadsDir: string }) {
   });
 
   app.put("/documents/:id", express.json({ limit: "5mb" }), (req, res) => {
-    const body = updateSchema.safeParse(req.body);
-    if (!body.success) return res.status(400).json({ error: body.error.issues });
+    const body = parseBody(updateSchema, req, res);
+    if (!body) return;
     const row = memberDocument(req, res);
     if (!row) return;
 
     const now = Date.now();
-    if (!db.updateDocument(row.id, body.data.annotations, body.data.version, now)) {
+    if (!db.updateDocument(row.id, body.annotations, body.version, now)) {
       return res.status(409).json({ error: "version is stale", version: row.version });
     }
-    res.json({ version: body.data.version + 1, updatedAt: now });
+    res.json({ version: body.version + 1, updatedAt: now });
   });
 
   app.delete("/documents/:id", async (req, res) => {

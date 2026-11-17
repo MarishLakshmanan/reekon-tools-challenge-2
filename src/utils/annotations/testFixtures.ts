@@ -1,3 +1,4 @@
+import { UNASSIGNED } from "./measurements";
 import type { AnnotationDoc, Measurement, PenPath, TextLabel } from "./types";
 
 export function path(id: string, pts: [number, number][], closed = false): PenPath {
@@ -27,7 +28,7 @@ export function measurement(id: string, pathId: string, from: number, to: number
 }
 
 export function unassigned(id: string): Measurement {
-  return { ...measurement(id, "x", 0, 1), pathId: null, startAnchorId: null, endAnchorId: null };
+  return { ...measurement(id, "x", 0, 1), ...UNASSIGNED };
 }
 
 export function text(id: string, x: number, y: number, value = "Hello"): TextLabel {

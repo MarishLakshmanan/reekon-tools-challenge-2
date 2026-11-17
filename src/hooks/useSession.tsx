@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 import * as auth from "@/api/auth";
 import type { Me } from "@/api/auth";
-import { setToken, setUnauthorizedHandler } from "@/api/client";
+import { setUnauthorizedHandler } from "@/api/client";
 
 type Session = {
   /** True until the saved token has been checked. */
@@ -22,7 +22,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // The server rejected our token (expired, or the session was ended elsewhere).
     setUnauthorizedHandler(() => {
-      setToken(null);
+      auth.forgetToken();
       setMe(null);
     });
     auth

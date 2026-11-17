@@ -2,6 +2,8 @@ import { useRef, useState } from "react";
 import type { ComponentRef } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
+import { Button } from "@/components/Button";
+import { colors, radius } from "@/utils/theme";
 import { UNITS } from "@/utils/annotations/measurements";
 import type { MeasurementUnit } from "@/utils/annotations/types";
 
@@ -28,9 +30,7 @@ export function AddMeasurementRow({
 
   return (
     <View style={styles.row}>
-      <Pressable style={styles.add} onPress={onAdd}>
-        <Text style={styles.addLabel}>Add Measurement</Text>
-      </Pressable>
+      <Button label="Add Measurement" icon="add" onPress={onAdd} style={styles.add} />
       <View ref={unitButton} collapsable={false}>
         <Pressable style={styles.unit} onPress={openMenu} accessibilityLabel="Choose unit">
           <Text style={styles.unitLabel}>{unit} ▾</Text>
@@ -60,14 +60,13 @@ export function AddMeasurementRow({
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", gap: 8, paddingHorizontal: 12 },
-  add: { flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: "center", backgroundColor: "#0a84ff" },
-  addLabel: { color: "white", fontWeight: "600" },
-  unit: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: 8, backgroundColor: "#e5e5ea" },
-  unitLabel: { color: "#111", fontWeight: "600" },
+  add: { flex: 1 },
+  unit: { minHeight: 48, paddingHorizontal: 16, borderRadius: radius.md, backgroundColor: colors.fill, justifyContent: "center" },
+  unitLabel: { color: colors.label, fontWeight: "600", fontSize: 16 },
   menu: {
     position: "absolute",
-    backgroundColor: "white",
-    borderRadius: 8,
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
     paddingVertical: 4,
     elevation: 6,
     shadowColor: "#000",
@@ -75,8 +74,8 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
   },
-  option: { paddingVertical: 10, paddingHorizontal: 16 },
-  optionActive: { backgroundColor: "#e5f1ff" },
-  optionLabel: { color: "#111", fontSize: 16 },
-  optionLabelActive: { color: "#0a84ff", fontWeight: "600" },
+  option: { paddingVertical: 12, paddingHorizontal: 18 },
+  optionActive: { backgroundColor: colors.tintSoft },
+  optionLabel: { color: colors.label, fontSize: 16 },
+  optionLabelActive: { color: colors.tint, fontWeight: "600" },
 });

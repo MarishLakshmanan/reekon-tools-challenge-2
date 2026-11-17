@@ -1,7 +1,7 @@
 /** Position in image pixels (not screen pixels). */
 export type Point = { x: number; y: number };
 
-export type Anchor = {
+type Anchor = {
   id: string;
   point: Point;
 };

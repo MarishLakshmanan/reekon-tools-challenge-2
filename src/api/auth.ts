@@ -1,13 +1,12 @@
 import * as SecureStore from "expo-secure-store";
-import { Platform } from "react-native";
 
 import { request, jsonInit, setToken } from "@/api/client";
 import { deleteAllLocal } from "@/utils/annotations/storage";
+import { isWeb } from "@/utils/platform";
 
 const TOKEN_KEY = "session-token";
 
 // SecureStore has no web implementation, so the browser keeps the token in localStorage.
-const isWeb = Platform.OS === "web";
 const readToken = async () => (isWeb ? localStorage.getItem(TOKEN_KEY) : SecureStore.getItemAsync(TOKEN_KEY));
 const writeToken = async (token: string) =>
   isWeb ? localStorage.setItem(TOKEN_KEY, token) : SecureStore.setItemAsync(TOKEN_KEY, token);
@@ -36,6 +35,12 @@ export async function signIn(email: string, password: string): Promise<void> {
   setToken(token);
 }
 
+/** Drops a token the server rejected, so the next launch starts at sign-in instead of retrying it. */
+export async function forgetToken(): Promise<void> {
+  setToken(null);
+  await clearToken();
+}
+
 /**
  * Ends the session. On a phone it also deletes every stored photo, because local files
  * aren't kept per user; the web stores none. A failed server call is ignored: the token is dropped regardless.
@@ -43,7 +48,9 @@ export async function signIn(email: string, password: string): Promise<void> {
 export async function signOut(): Promise<void> {
   try {
     await request("/auth/sign-out", { method: "POST" });
-  } catch {}
+  } catch {
+    // Offline or already expired: the local token is dropped either way.
+  }
   setToken(null);
   await clearToken();
   if (!isWeb) deleteAllLocal();

@@ -6,11 +6,8 @@ import type { Annotation, Measurement, PenPath, Point, Segment } from "./types";
 // thread. A worklet captures the functions it calls when it is created, so a
 // helper must be defined above any worklet that uses it.
 
-/** What a tap or drag landed on. `anchorId` is set when an anchor was hit. */
-export type Hit = { id: string; anchorId?: string };
-
-/** One straight piece of a path, between two adjacent anchors. */
-export type { Segment } from "./types";
+/** What a tap or drag landed on, or what is selected. `anchorId` is set for an anchor. */
+export type Selection = { id: string; anchorId?: string };
 
 /**
  * Lookup helpers for worklets in components. React Compiler hoists inline
@@ -51,17 +48,19 @@ export function textWidth(text: string, fontSize: number): number {
   return text.length * fontSize * 0.6;
 }
 
-function pathSegments(path: PenPath): Segment[] {
+/** Each straight piece of a path, with its end points; a closed path also joins its last anchor to its first. */
+function pathEdges(path: PenPath): { segment: Segment; from: Point; to: Point }[] {
   "worklet";
   const n = path.anchors;
-  const segs: Segment[] = [];
-  for (let i = 0; i < n.length - 1; i++) {
-    segs.push({ pathId: path.id, startAnchorId: n[i].id, endAnchorId: n[i + 1].id });
-  }
-  if (path.closed && n.length > 2) {
-    segs.push({ pathId: path.id, startAnchorId: n[n.length - 1].id, endAnchorId: n[0].id });
-  }
-  return segs;
+  const edge = (a: (typeof n)[number], b: (typeof n)[number]) => ({
+    segment: { pathId: path.id, startAnchorId: a.id, endAnchorId: b.id },
+    from: a.point,
+    to: b.point,
+  });
+  const edges = [];
+  for (let i = 0; i < n.length - 1; i++) edges.push(edge(n[i], n[i + 1]));
+  if (path.closed && n.length > 2) edges.push(edge(n[n.length - 1], n[0]));
+  return edges;
 }
 
 /** Topmost path segment within `tolerance` of `p`. */
@@ -70,30 +69,28 @@ export function hitSegment(p: Point, annotations: Annotation[], tolerance: numbe
   for (let i = annotations.length - 1; i >= 0; i--) {
     const a = annotations[i];
     if (a.kind !== "path") continue;
-    for (const seg of pathSegments(a)) {
-      const s = findAnchorPoint(annotations, a.id, seg.startAnchorId);
-      const e = findAnchorPoint(annotations, a.id, seg.endAnchorId);
-      if (s && e && distToSegment(p, s, e) <= tolerance) return seg;
+    for (const e of pathEdges(a)) {
+      if (distToSegment(p, e.from, e.to) <= tolerance) return e.segment;
     }
   }
   return null;
 }
 
-/** The measurement on a segment, in either direction. */
+/** True when `a` is the measurement on `seg`, in either direction. */
+export function isOnSegment(a: Annotation, seg: Segment): a is Measurement {
+  "worklet";
+  if (a.kind !== "measurement" || a.pathId !== seg.pathId) return false;
+  const same = a.startAnchorId === seg.startAnchorId && a.endAnchorId === seg.endAnchorId;
+  const flipped = a.startAnchorId === seg.endAnchorId && a.endAnchorId === seg.startAnchorId;
+  return same || flipped;
+}
+
 export function findMeasurement(annotations: Annotation[], seg: Segment): Measurement | undefined {
   "worklet";
   for (const a of annotations) {
-    if (a.kind !== "measurement" || a.pathId !== seg.pathId) continue;
-    const same = a.startAnchorId === seg.startAnchorId && a.endAnchorId === seg.endAnchorId;
-    const flipped = a.startAnchorId === seg.endAnchorId && a.endAnchorId === seg.startAnchorId;
-    if (same || flipped) return a;
+    if (isOnSegment(a, seg)) return a;
   }
   return undefined;
-}
-
-export function measurementLabel(m: Measurement): string {
-  "worklet";
-  return formatMeasurement(m.value, m.unit);
 }
 
 /**
@@ -115,7 +112,7 @@ export function measurementLayout(
   const len = Math.hypot(p2.x - p1.x, p2.y - p1.y) || 1;
   const nx = (p2.y - p1.y) / len;
   const ny = -(p2.x - p1.x) / len;
-  const width = textWidth(measurementLabel(m), fontSize);
+  const width = textWidth(formatMeasurement(m.value, m.unit), fontSize);
   const dist = m.labelOffset + Math.abs(nx) * (width / 2) + Math.abs(ny) * (fontSize / 2);
   const cx = (p1.x + p2.x) / 2 + nx * dist;
   const cy = (p1.y + p2.y) / 2 + ny * dist;
@@ -143,7 +140,7 @@ export function hitTest(
   annotations: Annotation[],
   tolerance: number,
   fontSize: number,
-): Hit | null {
+): Selection | null {
   "worklet";
   for (let i = annotations.length - 1; i >= 0; i--) {
     const a = annotations[i];
@@ -159,20 +156,14 @@ export function hitTest(
     if (a.kind !== "measurement") continue;
     const layout = measurementLayout(a, annotations, fontSize);
     // No tolerance: the label sits close to its segment and shouldn't steal taps from it.
-    if (layout && inTextBox(p, layout.label, measurementLabel(a), fontSize, 0)) {
+    if (layout && inTextBox(p, layout.label, formatMeasurement(a.value, a.unit), fontSize, 0)) {
       return { id: a.id };
     }
   }
   for (let i = annotations.length - 1; i >= 0; i--) {
     const a = annotations[i];
     if (a.kind === "path") {
-      const pts = pathPoints(a);
-      for (let j = 0; j < pts.length - 1; j++) {
-        if (distToSegment(p, pts[j], pts[j + 1]) <= tolerance) return { id: a.id };
-      }
-      if (a.closed && pts.length > 2 && distToSegment(p, pts[pts.length - 1], pts[0]) <= tolerance) {
-        return { id: a.id };
-      }
+      if (pathEdges(a).some((e) => distToSegment(p, e.from, e.to) <= tolerance)) return { id: a.id };
     } else if (a.kind === "text") {
       if (inTextBox(p, a.position, a.text, a.fontSize, tolerance)) return { id: a.id };
     }
@@ -187,8 +178,6 @@ export type DragTarget =
 
 /** Drag in progress; `delta` is in image pixels since the finger went down. */
 export type Drag = { target: DragTarget; delta: Point };
-
-export type Selection = { id: string; anchorId?: string };
 
 export function targetSelection(t: DragTarget): Selection {
   "worklet";
@@ -249,13 +238,12 @@ export function toImagePoint(x: number, y: number, v: ViewTransform): Point {
   return { x: (x - v.tx) / v.scale, y: (y - v.ty) / v.scale };
 }
 
-
 /** Zoom and pan on top of the fit transform. `x`/`y` are screen-pixel offsets applied after zooming. */
 export type Camera = { zoom: number; x: number; y: number };
 
 export const IDENTITY_CAMERA: Camera = { zoom: 1, x: 0, y: 0 };
-export const MIN_ZOOM = 1;
-export const MAX_ZOOM = 5;
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 5;
 
 /** The image-to-screen transform with the camera applied. */
 export function combineView(fit: ViewTransform, cam: Camera): ViewTransform {

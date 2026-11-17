@@ -5,11 +5,14 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View, useWindowD
 import { ScrollView } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ApiError, deleteRemote, getRemote, saveToServer, toLocalDoc, updateDoc } from "@/api/documents";
+import { ApiError } from "@/api/client";
+import { deleteRemote, getRemote, saveToServer, toLocalDoc, updateDoc } from "@/api/documents";
 
 import { AnnotationCanvas } from "@/components/canvas/AnnotationCanvas";
 import { AddMeasurementRow } from "@/components/AddMeasurementRow";
+import { Icon } from "@/components/Icon";
 import { MeasurementList } from "@/components/MeasurementList";
+import { StatusView } from "@/components/StatusView";
 import { MeasurementValueModal } from "@/components/MeasurementValueModal";
 import { TextInputModal } from "@/components/TextInputModal";
 import { Toolbar } from "@/components/Toolbar";
@@ -18,14 +21,15 @@ import { useSettings } from "@/hooks/useSettings";
 import { styleFor } from "@/utils/annotations/defaults";
 import { editorReducer } from "@/utils/annotations/docReducer";
 import type { DocAction } from "@/utils/annotations/docReducer";
-import type { Segment, Selection } from "@/utils/annotations/geometry";
+import type { Selection } from "@/utils/annotations/geometry";
 import { findMeasurement, hitSegment, hitTest } from "@/utils/annotations/geometry";
 import { makeId } from "@/utils/annotations/makeId";
 import { UNASSIGNED, randomValue } from "@/utils/annotations/measurements";
 import { deleteLocalDoc, imageUriFor, saveDoc } from "@/utils/annotations/storage";
 import { hasUnsavedChanges } from "@/utils/annotations/sync";
-import type { AnnotationDoc, Measurement, MeasurementUnit, PenPath, Point } from "@/utils/annotations/types";
+import type { AnnotationDoc, Measurement, MeasurementUnit, PenPath, Point, Segment } from "@/utils/annotations/types";
 import { SIZE_FACTOR, WIDTH_FACTOR } from "@/utils/settings";
+import { colors, radius, typography } from "@/utils/theme";
 
 const AUTOSAVE_MS = 500;
 
@@ -277,14 +281,20 @@ export function EditorScreen({ initialDoc }: { initialDoc: AnnotationDoc }) {
       options={{
         headerRight: () => (
           <View style={styles.headerButtons}>
-            <Pressable onPress={confirmDelete} disabled={busy} hitSlop={8}>
-              <Text style={[styles.headerButton, styles.danger, busy && styles.disabled]}>Delete</Text>
+            <Pressable onPress={confirmDelete} disabled={busy} hitSlop={10} accessibilityLabel="Delete photo">
+              <Icon name="trash" size={22} color={colors.danger} />
             </Pressable>
-            <Pressable onPress={save} disabled={busy || !unsaved} hitSlop={8}>
+            <Pressable
+              onPress={save}
+              disabled={busy || !unsaved}
+              hitSlop={8}
+              style={[styles.savePill, unsaved ? styles.savePillOn : styles.savePillOff]}
+              accessibilityLabel={unsaved ? "Save" : "Saved"}
+            >
               {busy ? (
-                <ActivityIndicator />
+                <ActivityIndicator color={colors.white} />
               ) : (
-                <Text style={[styles.headerButton, !unsaved && styles.disabled]}>{unsaved ? "Save •" : "Saved"}</Text>
+                <Text style={[styles.saveLabel, !unsaved && styles.saveLabelOff]}>{unsaved ? "Save" : "Saved"}</Text>
               )}
             </Pressable>
           </View>
@@ -293,14 +303,7 @@ export function EditorScreen({ initialDoc }: { initialDoc: AnnotationDoc }) {
     />
   );
 
-  if (!image) {
-    return (
-      <View style={styles.center}>
-        {header}
-        <ActivityIndicator />
-      </View>
-    );
-  }
+  if (!image) return <StatusView>{header}</StatusView>;
 
   const measurements = doc.annotations.filter((a): a is Measurement => a.kind === "measurement");
   // As tall as the photo needs, up to 70% of the screen: enough for 3:4 camera photos to fill the width.
@@ -321,6 +324,7 @@ export function EditorScreen({ initialDoc }: { initialDoc: AnnotationDoc }) {
           onSelect={setSelection}
           onCommit={dispatch}
         />
+        <Text style={styles.sectionTitle}>Tools</Text>
         <Toolbar
           tool={tool}
           onToolChange={changeTool}
@@ -328,6 +332,7 @@ export function EditorScreen({ initialDoc }: { initialDoc: AnnotationDoc }) {
           onDelete={selection ? deleteSelection : undefined}
           onUndo={draft || past.length > 0 ? undo : undefined}
         />
+        <Text style={styles.sectionTitle}>Measurements</Text>
         <AddMeasurementRow unit={addUnit} onUnitChange={setAddUnit} onAdd={addRandomMeasurement} />
         <MeasurementList
           measurements={measurements}
@@ -345,13 +350,15 @@ export function EditorScreen({ initialDoc }: { initialDoc: AnnotationDoc }) {
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, backgroundColor: "white" },
+  fill: { flex: 1, backgroundColor: colors.background },
   content: { gap: 12 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  headerButtons: { flexDirection: "row", alignItems: "center", gap: 20 },
-  headerButton: { fontSize: 16, fontWeight: "600", color: "#0a84ff" },
-  danger: { color: "#ff3b30" },
-  disabled: { opacity: 0.4 },
+  headerButtons: { flexDirection: "row", alignItems: "center", gap: 16 },
+  savePill: { minWidth: 70, height: 32, paddingHorizontal: 14, borderRadius: radius.pill, alignItems: "center", justifyContent: "center" },
+  savePillOn: { backgroundColor: colors.tint },
+  savePillOff: { backgroundColor: colors.fill },
+  saveLabel: { fontSize: 15, fontWeight: "600", color: colors.white },
+  saveLabelOff: { color: colors.secondaryLabel },
+  sectionTitle: { ...typography.section, paddingHorizontal: 16, marginTop: 4 },
 });
 
 function errorMessage(e: unknown): string {

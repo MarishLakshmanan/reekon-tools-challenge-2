@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { SessionProvider, useSession } from "@/hooks/useSession";
 import { SettingsProvider } from "@/hooks/useSettings";
+import { colors, MAX_CONTENT_WIDTH } from "@/utils/theme";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -20,7 +21,15 @@ function Routes() {
   if (loading) return null;
 
   return (
-    <Stack>
+    <Stack
+      screenOptions={{
+        headerStyle: { backgroundColor: colors.card },
+        headerTintColor: colors.tint,
+        headerTitleStyle: { color: colors.label, fontWeight: "600" },
+        headerShadowVisible: false,
+        contentStyle: { backgroundColor: colors.background },
+      }}
+    >
       <Stack.Protected guard={!!me}>
         <Stack.Screen name="index" options={{ title: me?.org.name ?? "" }} />
         <Stack.Screen name="settings" options={{ title: "Settings" }} />
@@ -29,7 +38,7 @@ function Routes() {
         {/* Opaque on iOS 26, where headers are transparent by default and the photo would draw under it. */}
         <Stack.Screen
           name="projects/[projectId]/editor/[id]"
-          options={{ title: "Annotate", headerTransparent: false, headerStyle: { backgroundColor: "white" } }}
+          options={{ title: "Annotate", headerTransparent: false, headerStyle: { backgroundColor: colors.card } }}
         />
       </Stack.Protected>
       <Stack.Protected guard={!me}>
@@ -56,5 +65,5 @@ export default function RootLayout() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, alignItems: "center", backgroundColor: "#d1d1d6" },
-  column: { flex: 1, width: "100%", maxWidth: 960 },
+  column: { flex: 1, width: "100%", maxWidth: MAX_CONTENT_WIDTH },
 });

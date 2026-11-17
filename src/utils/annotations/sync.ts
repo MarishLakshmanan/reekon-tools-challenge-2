@@ -4,7 +4,7 @@ export function hasUnsavedChanges(doc: AnnotationDoc): boolean {
   return doc.updatedAt !== doc.savedAt;
 }
 
-export type SyncStep =
+type SyncStep =
   /** On the server but not on this phone. */
   | { type: "download"; id: string }
   /** Server is ahead and there are no local edits: replace `doc.json`. */

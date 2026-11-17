@@ -1,12 +1,13 @@
-import { Rect, Skia, Text, matchFont } from "@shopify/react-native-skia";
+import { Rect, Skia, Text } from "@shopify/react-native-skia";
 import type { SkTypeface } from "@shopify/react-native-skia";
 import { useMemo } from "react";
-import { Platform } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 import { useDerivedValue } from "react-native-reanimated";
 
+import { OFFSCREEN, systemFont } from "@/components/canvas/shared";
 import { findAnnotation, textWidth } from "@/utils/annotations/geometry";
 import type { Annotation, TextLabel } from "@/utils/annotations/types";
+import { colors } from "@/utils/theme";
 
 export function TextShape({
   live,
@@ -24,16 +25,13 @@ export function TextShape({
 }) {
   // Each label keeps the size it was created with, so changing the text size setting does not resize old ones.
   const font = useMemo(
-    () =>
-      typeface
-        ? Skia.Font(typeface, label.fontSize)
-        : matchFont({ fontFamily: Platform.select({ ios: "Helvetica", default: "sans-serif" }), fontSize: label.fontSize }),
+    () => (typeface ? Skia.Font(typeface, label.fontSize) : systemFont(label.fontSize)),
     [label.fontSize, typeface],
   );
   const outline = useDerivedValue(() => 2 * pxToImage.value);
   const position = useDerivedValue(() => {
     const current = findAnnotation(live.value, label.id);
-    return current?.kind === "text" ? current.position : { x: -1e6, y: -1e6 };
+    return current?.kind === "text" ? current.position : OFFSCREEN;
   });
   const x = useDerivedValue(() => position.value.x);
   const y = useDerivedValue(() => position.value.y);
@@ -49,7 +47,7 @@ export function TextShape({
           width={textWidth(label.text, label.fontSize)}
           height={label.fontSize * 1.2}
           style="stroke"
-          color="#ff9f0a"
+          color={colors.highlight}
           strokeWidth={outline}
         />
       )}
