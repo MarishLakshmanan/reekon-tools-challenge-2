@@ -2,7 +2,7 @@
 
 ## 1. Goal
 
-Take a photo with the camera, show it on a Skia canvas, and let the user draw on it. The user can build paths with a pen tool (tap to drop anchors joined by straight lines), add measurement lines with a value they type in, and place typed text labels. Any annotation can be selected, moved, and deleted. All drawing is smooth (gestures and redraws run on the UI thread).
+Take a photo with the camera, show it on a Skia canvas, and let the user draw on it. The user can build paths with a pen tool (tap to drop anchors joined by straight lines), tap any segment of a path to attach a length they type in, and place typed text labels. Any annotation can be selected, moved, and deleted. All drawing is smooth (gestures and redraws run on the UI thread).
 
 ## 2. Dependencies
 
@@ -48,21 +48,18 @@ type PenPath = {
   strokeWidth: number;
 };
 
-// A measurement end is either attached to a path's anchor or a free point.
-// It snaps to an anchor when dropped close to one.
-type MeasurementEnd =
-  | { kind: 'anchor'; pathId: string; anchorId: string } // follows the anchor when it moves
-  | { kind: 'point'; point: Point };                       // free, not attached
-
-// A line between two ends with a value the user types in.
+// A length the user typed in for one segment of a path (two adjacent anchors).
+// It has no points of its own: it is drawn from its two anchors, so it stays
+// on its segment when an anchor moves.
 type Measurement = {
   id: string;
   kind: 'measurement';
-  start: MeasurementEnd;
-  end: MeasurementEnd;
+  pathId: string;
+  startAnchorId: string;
+  endAnchorId: string;
   value: number;       // entered by the user, not calculated from pixels
   unit: 'mm' | 'cm' | 'm' | 'in' | 'ft';
-  labelOffset: number; // how far the label sits from the line
+  labelOffset: number; // gap between the segment and its label, in image pixels
   color: string;
 };
 
@@ -91,12 +88,14 @@ Why this shape:
 - **Anchors with ids** let us move or delete a single point later, and turning a path into a Skia path is a simple loop of `moveTo` / `lineTo`.
 - **One `annotations` list with a `kind` field** gives one draw order, one hit-test loop, and one undo history for every tool. Adding a new tool later is adding one more type.
 - **Measurement value is typed in**, because the photo has no real-world scale. Later we could add a reference length to calculate it.
-- **Measurements store an anchor reference, not a copy of the point**, so they stay attached when the anchor moves. The position is looked up from the anchor at draw time.
+- **A measurement belongs to a segment, not to free points.** The user taps a line that already exists, so there is no separate line to draw, snap, or keep in sync. The segment is stored as the path id plus its two anchor ids, and its position is looked up at draw time.
+- **One measurement per segment.** Tapping a segment that already has one opens it for editing instead of adding a second.
 
-Snapping rules:
-- When a measurement end is dropped within a small distance of an anchor, it attaches to that anchor.
-- Deleting a path also deletes every measurement attached to any of its anchors.
-- Deleting a single anchor also deletes every measurement attached to that anchor.
+Measurement rules:
+- Measure tool: tap a segment, enter a value and unit in the dialog, then Add. Tapping an already-measured segment reopens the dialog with its value and a Save button.
+- Select tool: tap a measurement's label to select it and use Delete to remove it. Measurements can't be dragged; they move with their anchors.
+- Deleting a path also deletes every measurement on it.
+- Deleting a single anchor deletes the measurements on the segments that touch that anchor.
 
 ## 4. Decision Log
 
