@@ -10,7 +10,7 @@ Fix the Expo web build so it works in the browser. On the web, users review docu
 
 ## 2. Dependencies
 
-No new packages.
+No new packages. The web build uses CanvasKit, Skia's web runtime, which comes with the installed Skia package, and one bundled font file (Roboto Regular, Apache-2.0) for drawing text on the canvas.
 
 ## 3. What the Web Can Do
 
@@ -49,7 +49,12 @@ No new packages.
 - Stale version: the server rejects the edit. The web shows that the document changed elsewhere and reloads the server copy; the edit is discarded.
 - A phone holding unsaved changes to the same document gets a conflict on its next Save, handled the same way as an edit from another phone.
 
-## 6. Decision Log
+## 6. Layout
+
+- On a wide window the app is a centred column, 960 px at most, on a grey page background. On a phone the column is the full width, so nothing changes.
+- Measurement cards are squares in a wrapping grid, with the color bar on the top edge and the remove button in the corner. This applies to both the phone and the web.
+
+## 7. Decision Log
 
 | # | Decision | Why |
 | --- | --- | --- |
