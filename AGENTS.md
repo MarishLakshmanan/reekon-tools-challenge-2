@@ -50,7 +50,7 @@ Run lint and typecheck before declaring any task done.
 
 To see the app on the Android emulator:
 
-1. Run `adb reverse tcp:8081 tcp:8081`
+1. Run `adb reverse tcp:8081 tcp:8081`, in case the device is not reachable. try using the windows adb service under `/mnt/c`
 2. the API server, started with `cd server && npm run dev`.
 3. Start the app in the background with `npx expo start --android`.
 4. Wait until it has loaded on the emulator.
