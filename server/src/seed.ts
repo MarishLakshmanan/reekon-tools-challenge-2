@@ -7,8 +7,8 @@ const ORG = { id: "org1", name: "Reekon Interiors" };
 
 // Dev logins only. Ids are fixed so the seed can run more than once.
 const USERS = [
-  { id: "u1", email: "asha@reekon.test", name: "Asha", password: "asha-pass" },
-  { id: "u2", email: "ben@reekon.test", name: "Ben", password: "ben-pass" },
+  { id: "u1", email: "dana@reekon.test", name: "Dana", password: "dana-pass" },
+  { id: "u2", email: "marcus@reekon.test", name: "Marcus", password: "marcus-pass" },
   { id: "u3", email: "chen@reekon.test", name: "Chen", password: "chen-pass" },
   { id: "u4", email: "dara@reekon.test", name: "Dara", password: "dara-pass" },
 ];

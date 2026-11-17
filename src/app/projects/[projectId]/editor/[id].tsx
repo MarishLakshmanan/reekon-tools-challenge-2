@@ -1,8 +1,9 @@
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Text, View } from "react-native";
 
 import { EditorScreen } from "@/screens/EditorScreen";
+import { WebEditorScreen } from "@/screens/WebEditorScreen";
 import { downloadImage, loadDoc, localImage } from "@/utils/annotations/storage";
 import type { AnnotationDoc } from "@/utils/annotations/types";
 
@@ -23,6 +24,11 @@ async function load(projectId: string, id: string): Promise<AnnotationDoc | null
 
 export default function EditorRoute() {
   const { projectId, id } = useLocalSearchParams<{ projectId: string; id: string }>();
+  // The web views and edits the server copy directly; the phone works on a local copy.
+  return Platform.OS === "web" ? <WebEditorScreen id={id} /> : <PhoneEditor projectId={projectId} id={id} />;
+}
+
+function PhoneEditor({ projectId, id }: { projectId: string; id: string }) {
   const [doc, setDoc] = useState<AnnotationDoc | null | undefined>(undefined);
 
   useEffect(() => {

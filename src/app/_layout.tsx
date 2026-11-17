@@ -1,6 +1,7 @@
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
+import { StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { SessionProvider, useSession } from "@/hooks/useSession";
@@ -40,12 +41,20 @@ function Routes() {
 
 export default function RootLayout() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={styles.root}>
       <SessionProvider>
         <SettingsProvider>
-          <Routes />
+          {/* On a wide window (the web) the app is a centred column; a phone is narrower, so this has no effect there. */}
+          <View style={styles.column}>
+            <Routes />
+          </View>
         </SettingsProvider>
       </SessionProvider>
     </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1, alignItems: "center", backgroundColor: "#d1d1d6" },
+  column: { flex: 1, width: "100%", maxWidth: 960 },
+});

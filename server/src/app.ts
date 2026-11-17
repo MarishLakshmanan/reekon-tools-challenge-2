@@ -2,7 +2,7 @@ import { rm, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 
 import express from "express";
-import type { ErrorRequestHandler, Request, Response } from "express";
+import type { ErrorRequestHandler, Request, RequestHandler, Response } from "express";
 import multer from "multer";
 
 import { currentUser, newToken, requireUser, SESSION_MS, verifyPassword } from "./auth.ts";
@@ -10,6 +10,21 @@ import type { Db, DocumentRow, ProjectRow, UserRow } from "./db.ts";
 import { addMemberSchema, createProjectSchema, createSchema, signInSchema, updateSchema } from "./schema.ts";
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+
+/**
+ * Lets the web build, served from another origin, call the API. Any origin is allowed:
+ * auth is a Bearer header, not a cookie, so a page can't act for a user it has no token for.
+ * Preflights are answered here, before the auth check would reject them.
+ */
+const cors: RequestHandler = (req, res, next) => {
+  res.set({
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Authorization, Content-Type",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  });
+  if (req.method === "OPTIONS") return res.status(204).end();
+  next();
+};
 
 // A path, not a full URL: the app adds the server address it is configured with. The request's
 // Host header can't be trusted for this, since a tunnel or proxy rewrites it.
@@ -40,6 +55,7 @@ const notFound = (res: Response) => res.status(404).json({ error: "not found" })
 /** Builds the API without listening, so tests can run it on a random port. */
 export function createApp({ db, uploadsDir }: { db: Db; uploadsDir: string }) {
   const app = express();
+  app.use(cors);
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_IMAGE_BYTES } });
   const filePath = (row: DocumentRow) => join(uploadsDir, basename(row.imagePath));
 

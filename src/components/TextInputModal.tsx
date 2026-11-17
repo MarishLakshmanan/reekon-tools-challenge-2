@@ -6,6 +6,7 @@ export function TextInputModal({
   title = "Add text",
   placeholder = "Label",
   confirmLabel = "Add",
+  initial = "",
   onConfirm,
   onCancel,
 }: {
@@ -13,10 +14,12 @@ export function TextInputModal({
   title?: string;
   placeholder?: string;
   confirmLabel?: string;
+  /** Starting text. Read on mount, so mount the modal per edit to start from it. */
+  initial?: string;
   onConfirm: (text: string) => void;
   onCancel: () => void;
 }) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initial);
   const trimmed = text.trim();
 
   function confirm() {

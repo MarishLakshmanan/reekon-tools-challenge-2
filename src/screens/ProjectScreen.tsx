@@ -2,23 +2,29 @@ import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, FlatList, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { ApiError, authHeaders } from "@/api/client";
+import { listRemote } from "@/api/documents";
+import type { RemoteSummary } from "@/api/documents";
 import { deleteProject, getProject } from "@/api/projects";
 import type { ProjectDetail } from "@/api/projects";
 import { syncWithServer } from "@/api/sync";
 import { MembersModal } from "@/components/MembersModal";
+import { ServerImage } from "@/components/ServerImage";
 import { useSession } from "@/hooks/useSession";
 import { createDoc, deleteLocalProject, imageUriFor, listDocs } from "@/utils/annotations/storage";
 import { hasUnsavedChanges } from "@/utils/annotations/sync";
 import type { AnnotationDoc } from "@/utils/annotations/types";
 
+// The web only views: documents come straight from the server, and nothing is added, deleted or managed.
+const isWeb = Platform.OS === "web";
+
 export function ProjectScreen({ projectId }: { projectId: string }) {
   const router = useRouter();
   const { me } = useSession();
   const [project, setProject] = useState<ProjectDetail | null>(null);
-  const [docs, setDocs] = useState<AnnotationDoc[]>([]);
+  const [docs, setDocs] = useState<(AnnotationDoc | RemoteSummary)[]>([]);
   const [conflicts, setConflicts] = useState<Set<string>>(new Set());
   const [managing, setManaging] = useState(false);
 
@@ -28,7 +34,7 @@ export function ProjectScreen({ projectId }: { projectId: string }) {
       .catch((e) => {
         if (e instanceof ApiError && e.status === 404) {
           // Deleted, or this user was removed: the photos can't be saved anymore.
-          deleteLocalProject(projectId);
+          if (!isWeb) deleteLocalProject(projectId);
           Alert.alert("This project is no longer available");
           router.back();
         }
@@ -39,8 +45,16 @@ export function ProjectScreen({ projectId }: { projectId: string }) {
   useFocusEffect(
     useCallback(() => {
       let focused = true;
-      setDocs(listDocs(projectId));
       loadProject();
+      if (isWeb) {
+        listRemote(projectId)
+          .then((list) => focused && setDocs(list))
+          .catch(() => {});
+        return () => {
+          focused = false;
+        };
+      }
+      setDocs(listDocs(projectId));
       syncWithServer(projectId)
         .then((ids) => {
           if (!focused) return;
@@ -63,7 +77,7 @@ export function ProjectScreen({ projectId }: { projectId: string }) {
     router.push(`/projects/${projectId}/editor/${doc.id}`);
   }
 
-  const isOwner = project !== null && project.ownerId === me?.user.id;
+  const isOwner = !isWeb && project !== null && project.ownerId === me?.user.id;
 
   function confirmDelete() {
     Alert.alert("Delete project?", "All its photos are deleted for every member.", [
@@ -107,14 +121,16 @@ export function ProjectScreen({ projectId }: { projectId: string }) {
         columnWrapperStyle={styles.row}
         ListHeaderComponent={
           <View style={styles.header}>
-            <View style={styles.actions}>
-              <Pressable style={styles.button} onPress={() => router.push(`/projects/${projectId}/camera`)}>
-                <Text style={styles.buttonText}>Take photo</Text>
-              </Pressable>
-              <Pressable style={[styles.button, styles.secondary]} onPress={pickPhoto}>
-                <Text style={[styles.buttonText, styles.secondaryText]}>Pick photo</Text>
-              </Pressable>
-            </View>
+            {!isWeb && (
+              <View style={styles.actions}>
+                <Pressable style={styles.button} onPress={() => router.push(`/projects/${projectId}/camera`)}>
+                  <Text style={styles.buttonText}>Take photo</Text>
+                </Pressable>
+                <Pressable style={[styles.button, styles.secondary]} onPress={pickPhoto}>
+                  <Text style={[styles.buttonText, styles.secondaryText]}>Pick photo</Text>
+                </Pressable>
+              </View>
+            )}
             {project && (
               <View style={styles.members}>
                 <Text style={styles.membersText} numberOfLines={2}>
@@ -132,19 +148,26 @@ export function ProjectScreen({ projectId }: { projectId: string }) {
         ListEmptyComponent={<Text style={styles.empty}>No photos yet.</Text>}
         renderItem={({ item }) => (
           <Pressable style={styles.card} onPress={() => router.push(`/projects/${projectId}/editor/${item.id}`)}>
-            <Image
-              source={{ uri: imageUriFor(item), headers: authHeaders() }}
-              style={styles.thumb}
-              contentFit="cover"
-            />
-            <View style={styles.captionRow}>
-              <Text style={styles.caption}>{item.annotations.length} annotations</Text>
-              {conflicts.has(item.id) ? (
-                <Text style={[styles.badge, styles.conflict]}>Conflict</Text>
-              ) : (
-                hasUnsavedChanges(item) && <Text style={styles.badge}>Unsaved</Text>
-              )}
-            </View>
+            {/* A server summary (web) has no annotations; a local document (phone) does. */}
+            {"annotations" in item ? (
+              <>
+                <Image
+                  source={{ uri: imageUriFor(item), headers: authHeaders() }}
+                  style={styles.thumb}
+                  contentFit="cover"
+                />
+                <View style={styles.captionRow}>
+                  <Text style={styles.caption}>{item.annotations.length} annotations</Text>
+                  {conflicts.has(item.id) ? (
+                    <Text style={[styles.badge, styles.conflict]}>Conflict</Text>
+                  ) : (
+                    hasUnsavedChanges(item) && <Text style={styles.badge}>Unsaved</Text>
+                  )}
+                </View>
+              </>
+            ) : (
+              <ServerImage path={item.image.uri} style={styles.thumb} />
+            )}
           </Pressable>
         )}
       />

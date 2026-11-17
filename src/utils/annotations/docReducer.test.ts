@@ -1,6 +1,6 @@
 import { UNDO_LIMIT, docReducer, editorReducer } from "./docReducer";
 import type { EditorState } from "./docReducer";
-import { doc, measurement, path, unassigned } from "./testFixtures";
+import { doc, measurement, path, text, unassigned } from "./testFixtures";
 
 const ids = (d: ReturnType<typeof doc>) => d.annotations.map((a) => a.id);
 
@@ -102,6 +102,11 @@ describe("docReducer edits", () => {
       unit: "m",
     });
     expect(next.annotations[1]).toMatchObject({ value: 2.5, unit: "m" });
+  });
+
+  it("updateText changes only the label's text", () => {
+    const next = docReducer(doc([text("t", 5, 5)]), { type: "updateText", id: "t", text: "Door" });
+    expect(next.annotations[0]).toEqual({ ...text("t", 5, 5), text: "Door" });
   });
 
   it("returns the same doc when nothing changes", () => {

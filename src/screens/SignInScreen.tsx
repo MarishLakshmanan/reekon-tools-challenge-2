@@ -17,7 +17,7 @@ export function SignInScreen() {
     try {
       await signIn(email, password);
     } catch (e) {
-      setError(e instanceof ApiError && e.status === 401 ? "Wrong email or password." : "Could not reach the server.");
+      setError(signInError(e));
       setBusy(false);
     }
   }
@@ -59,3 +59,8 @@ const styles = StyleSheet.create({
   buttonText: { color: "white", fontWeight: "600" },
   disabled: { opacity: 0.5 },
 });
+
+function signInError(e: unknown): string {
+  if (!(e instanceof ApiError)) return "Could not reach the server.";
+  return e.status === 401 ? "Wrong email or password." : "Sign-in failed. Try again.";
+}

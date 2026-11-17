@@ -95,6 +95,19 @@ describe("auth", () => {
     assert.deepEqual(await wrongPassword.json(), await unknownEmail.json());
   });
 
+  test("CORS: preflights pass without a token, and responses allow any origin", async () => {
+    const preflight = await fetch(`${base}/projects`, {
+      method: "OPTIONS",
+      headers: { Origin: "http://web.test", "Access-Control-Request-Method": "GET" },
+    });
+    assert.equal(preflight.status, 204);
+    assert.equal(preflight.headers.get("access-control-allow-origin"), "*");
+    assert.match(preflight.headers.get("access-control-allow-headers") ?? "", /Authorization/);
+
+    const res = await fetch(`${base}/projects`, as("u1"));
+    assert.equal(res.headers.get("access-control-allow-origin"), "*");
+  });
+
   test("routes need a valid token", async () => {
     assert.equal((await fetch(`${base}/projects`)).status, 401);
     assert.equal((await fetch(`${base}/projects`, { headers: { Authorization: "Bearer bad" } })).status, 401);

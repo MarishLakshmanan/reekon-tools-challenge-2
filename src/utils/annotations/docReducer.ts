@@ -6,6 +6,7 @@ export type DocAction =
   | { type: "moveAnchor"; pathId: string; anchorId: string; point: Point }
   | { type: "moveText"; id: string; position: Point }
   | { type: "updateMeasurement"; id: string; value: number; unit: MeasurementUnit }
+  | { type: "updateText"; id: string; text: string }
   /** Puts an unassigned measurement on `segment`. Ignored if that segment already has one. */
   | { type: "linkMeasurement"; id: string; segment: Segment }
   | { type: "delete"; id: string }
@@ -65,6 +66,8 @@ export function applyAction(list: Annotation[], action: DocAction): Annotation[]
           ? { ...a, value: action.value, unit: action.unit }
           : a,
       );
+    case "updateText":
+      return list.map((a) => (a.kind === "text" && a.id === action.id ? { ...a, text: action.text } : a));
     case "linkMeasurement": {
       if (list.some((a) => onSegment(a, action.segment))) return list;
       const { pathId, startAnchorId, endAnchorId } = action.segment;
