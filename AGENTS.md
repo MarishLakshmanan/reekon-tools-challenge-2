@@ -50,8 +50,9 @@ Run lint and typecheck before declaring any task done.
 
 To see the app on the Android emulator:
 
-1. Run `adb reverse tcp:8081 tcp:8081`.
-2. Start the app in the background with `npx expo start --android`.
-3. Wait until it has loaded on the emulator.
-4. Read the screen with `mobile_list_elements_on_screen`. It returns the element tree (like the DOM) with labels and coordinates, and taps can use its refs.
-5. Only take a screenshot when the tree can't answer the question, for example a Skia canvas, which draws no elements, or a visual check.
+1. Run `adb reverse tcp:8081 tcp:8081`
+2. the API server, started with `cd server && npm run dev`.
+3. Start the app in the background with `npx expo start --android`.
+4. Wait until it has loaded on the emulator.
+5. Read the screen with `mobile_list_elements_on_screen`. It returns the element tree (like the DOM) with labels and coordinates, and taps can use its refs.
+6. Only take a screenshot when the tree can't answer the question, for example a Skia canvas, which draws no elements, or a visual check.

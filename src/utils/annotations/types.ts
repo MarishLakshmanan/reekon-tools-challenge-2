@@ -45,9 +45,14 @@ export type Annotation = PenPath | Measurement | TextLabel;
 
 export type AnnotationDoc = {
   id: string;
+  /** `uri` is the local file when there is one, otherwise the server URL. */
   image: { uri: string; width: number; height: number };
   /** Array order is draw order. */
   annotations: Annotation[];
   createdAt: number;
   updatedAt: number;
+  /** Server `version` at the last successful Save or download; `null` until first uploaded. */
+  serverVersion: number | null;
+  /** `updatedAt` at the last successful Save or download. Unsaved changes when it differs. */
+  savedAt: number | null;
 };

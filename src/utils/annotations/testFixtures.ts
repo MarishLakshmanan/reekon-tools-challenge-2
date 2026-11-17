@@ -37,5 +37,7 @@ export function doc(annotations: AnnotationDoc["annotations"]): AnnotationDoc {
     annotations,
     createdAt: 0,
     updatedAt: 0,
+    serverVersion: null,
+    savedAt: null,
   };
 }

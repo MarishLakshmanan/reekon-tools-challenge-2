@@ -75,7 +75,17 @@ export function applyAction(list: Annotation[], action: DocAction): Annotation[]
   }
 }
 
-export function docReducer(doc: AnnotationDoc, action: DocAction): AnnotationDoc {
+/**
+ * A Save finished. `savedAt` is the `updatedAt` that was sent, so edits made during the request stay unsaved.
+ * `imageUri` is the server URL, given after the first upload.
+ */
+export type SavedAction = { type: "markSaved"; serverVersion: number; savedAt: number; imageUri?: string };
+
+export function docReducer(doc: AnnotationDoc, action: DocAction | SavedAction): AnnotationDoc {
+  if (action.type === "markSaved") {
+    const image = action.imageUri ? { ...doc.image, uri: action.imageUri } : doc.image;
+    return { ...doc, image, serverVersion: action.serverVersion, savedAt: action.savedAt };
+  }
   const annotations = applyAction(doc.annotations, action);
   if (annotations === doc.annotations) return doc;
   return { ...doc, annotations, updatedAt: Date.now() };

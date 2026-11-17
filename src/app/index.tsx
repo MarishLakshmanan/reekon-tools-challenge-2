@@ -4,16 +4,30 @@ import * as ImagePicker from "expo-image-picker";
 import { useCallback, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
-import { createDoc, listDocs } from "@/utils/annotations/storage";
+import { syncWithServer } from "@/api/sync";
+import { createDoc, imageUriFor, listDocs } from "@/utils/annotations/storage";
+import { hasUnsavedChanges } from "@/utils/annotations/sync";
 import type { AnnotationDoc } from "@/utils/annotations/types";
 
 export default function Home() {
   const router = useRouter();
   const [docs, setDocs] = useState<AnnotationDoc[]>([]);
+  const [conflicts, setConflicts] = useState<Set<string>>(new Set());
 
   useFocusEffect(
     useCallback(() => {
+      let focused = true;
       setDocs(listDocs());
+      syncWithServer()
+        .then((ids) => {
+          if (!focused) return;
+          setConflicts(ids);
+          setDocs(listDocs());
+        })
+        .catch(() => {}); // offline: the local list is already shown
+      return () => {
+        focused = false;
+      };
     }, []),
   );
 
@@ -46,8 +60,15 @@ export default function Home() {
       ListEmptyComponent={<Text style={styles.empty}>No photos yet.</Text>}
       renderItem={({ item }) => (
         <Pressable style={styles.card} onPress={() => router.push(`/editor/${item.id}`)}>
-          <Image source={item.image.uri} style={styles.thumb} contentFit="cover" />
-          <Text style={styles.caption}>{item.annotations.length} annotations</Text>
+          <Image source={imageUriFor(item)} style={styles.thumb} contentFit="cover" />
+          <View style={styles.captionRow}>
+            <Text style={styles.caption}>{item.annotations.length} annotations</Text>
+            {conflicts.has(item.id) ? (
+              <Text style={[styles.badge, styles.conflict]}>Conflict</Text>
+            ) : (
+              hasUnsavedChanges(item) && <Text style={styles.badge}>Unsaved</Text>
+            )}
+          </View>
         </Pressable>
       )}
     />
@@ -65,6 +86,9 @@ const styles = StyleSheet.create({
   row: { gap: 12, marginBottom: 12 },
   card: { flex: 1 },
   thumb: { aspectRatio: 1, borderRadius: 10, backgroundColor: "#ddd" },
-  caption: { marginTop: 4, fontSize: 12, color: "#666" },
+  captionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 4 },
+  caption: { fontSize: 12, color: "#666" },
+  badge: { fontSize: 12, fontWeight: "600", color: "#ff9500" },
+  conflict: { color: "#ff3b30" },
   empty: { textAlign: "center", color: "#888", marginTop: 40 },
 });

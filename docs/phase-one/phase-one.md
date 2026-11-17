@@ -97,7 +97,68 @@ Measurement rules:
 - Deleting a path also deletes every measurement on it.
 - Deleting a single anchor deletes the measurements on the segments that touch that anchor.
 
-## 4. Decision Log
+## 4. Storage
+
+Everything is stored locally on the device as plain files, using `expo-file-system`. There is no database.
+
+```
+<app documents>/docs/<id>/
+  image.jpg   copy of the photo (camera and picker files are temporary)
+  doc.json    the annotations
+```
+
+- **Image:** the photo itself is copied into the folder, not just linked.
+- **Image URI on load:** rebuilt from the folder path, because the saved `uri` can go stale between launches.
+- **Autosave (debounced):** a save runs 500 ms after the last change, not on a fixed 500 ms timer. Each change restarts the timer. Leaving the screen saves once more.
+- **While dragging:** nothing is saved. The moving point lives only in a shared value, and the document changes once, when the finger lifts.
+
+Example `doc.json` (one path with 3 anchors, one measurement on its first segment, one text label):
+
+```json
+{
+  "id": "m3k9x1ab12cd",
+  "image": { "uri": "file:///.../docs/m3k9x1ab12cd/image.jpg", "width": 3000, "height": 4000 },
+  "annotations": [
+    {
+      "id": "p1",
+      "kind": "path",
+      "anchors": [
+        { "id": "a1", "point": { "x": 820, "y": 1200 } },
+        { "id": "a2", "point": { "x": 2100, "y": 1180 } },
+        { "id": "a3", "point": { "x": 2150, "y": 2600 } }
+      ],
+      "closed": false,
+      "stroke": "#ff3b30",
+      "strokeWidth": 12
+    },
+    {
+      "id": "m1",
+      "kind": "measurement",
+      "pathId": "p1",
+      "startAnchorId": "a1",
+      "endAnchorId": "a2",
+      "value": 120,
+      "unit": "cm",
+      "labelOffset": 45,
+      "color": "#0a84ff"
+    },
+    {
+      "id": "t1",
+      "kind": "text",
+      "position": { "x": 900, "y": 3000 },
+      "text": "Window",
+      "fontSize": 120,
+      "color": "#ffd60a"
+    }
+  ],
+  "createdAt": 1763300000000,
+  "updatedAt": 1763300500000
+}
+```
+
+Limits: data stays on this device (no sync or backup), and the home screen reads every `doc.json` when opened, which is fine for dozens of photos.
+
+## 5. Decision Log
 
 | # | Decision | Why |
 | --- | --- | --- |

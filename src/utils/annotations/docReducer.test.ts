@@ -82,3 +82,16 @@ describe("docReducer edits", () => {
     expect(docReducer(d, { type: "deleteAnchor", pathId: "missing", anchorId: "x" })).toBe(d);
   });
 });
+
+describe("docReducer markSaved", () => {
+  it("records the server version and the sent updatedAt without touching annotations", () => {
+    const d = { ...doc([path("p", [[0, 0], [10, 0]])]), updatedAt: 50 };
+    const next = docReducer(d, { type: "markSaved", serverVersion: 2, savedAt: 40, imageUri: "http://h/images/d.jpg" });
+    expect(next).toEqual({
+      ...d,
+      image: { ...d.image, uri: "http://h/images/d.jpg" },
+      serverVersion: 2,
+      savedAt: 40,
+    });
+  });
+});
