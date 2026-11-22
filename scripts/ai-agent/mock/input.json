@@ -1,0 +1,21 @@
+{
+  "request": "mark the lines on that window",
+  "image": "window.jpg",
+  "style": {
+    "stroke": "#ff3b30",
+    "strokeWidth": 5
+  },
+  "annotations": [
+    {
+      "id": "mock1",
+      "kind": "text",
+      "position": {
+        "x": 40,
+        "y": 60
+      },
+      "text": "Living room",
+      "fontSize": 48,
+      "color": "#ffffff"
+    }
+  ]
+}

@@ -40,7 +40,7 @@ const textLabel = z.object({
   color: z.string(),
 });
 
-const annotationsSchema: z.ZodType<Annotation[]> = z.array(
+export const annotationsSchema: z.ZodType<Annotation[]> = z.array(
   z.union([penPath, measurement, textLabel]),
 );
 

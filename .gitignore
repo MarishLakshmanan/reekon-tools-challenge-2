@@ -53,3 +53,6 @@ public/canvaskit.wasm
 
 # Playwright MCP output
 .playwright-mcp/
+
+# AI agent script output
+scripts/ai-agent/out/
