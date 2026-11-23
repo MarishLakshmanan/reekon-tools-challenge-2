@@ -2,7 +2,7 @@
 
 ## 1. Goal
 
-Add an AI agent to the editor. The user types a request such as "mark the lines on that window", and the agent creates the anchors, segments, and pen paths for it on the photo.
+Add an AI agent to the editor. The user types a request such as "mark the lines on that window", and the agent creates the anchors, segments, pen paths, and text labels for it on the photo.
 
 ## 2. Dependencies
 
@@ -15,8 +15,8 @@ Installed in the server.
 
 ## 3. Shared Schemas
 
-- The Zod schemas that validate annotations live in the server module today.
-- They move to a shared module that both the server and the app import.
+- The Zod schemas that validate annotations live in `shared/`, which both the server and the app import.
+- Request schemas that only the server needs, such as sign-in, stay in the server.
 - The server uses them to validate saved documents and the agent's output.
 - The app uses them to validate the agent's annotations before drawing them.
 
@@ -51,7 +51,9 @@ flowchart LR
 ## 6. After the Agent Draws
 
 - The new annotations are added to the existing ones; nothing is replaced.
-- They go through the same reducer as the user's own edits.
+- They go through the same reducer as the user's own edits, as one edit, so one Undo removes them all.
+- They get new ids in the app, so they can't clash with edits made while the agent worked.
+- They use the line color and width the pen tool uses.
 - They count as an unsaved change, and Save sends them like any other edit.
 
 ## 7. Considered but Not Done
@@ -59,6 +61,7 @@ flowchart LR
 | Option | Why not now |
 | --- | --- |
 | A dedicated object detection model, such as Grounding DINO or OWLv2, to find the object before drawing | These models give more accurate coordinates, but Gemini is enough for the MVP and adding another model is outside the project's scope. A possible upgrade later. |
+| Fine-tuning a model on photos with lines the users drew themselves | The model would learn where this app's lines belong, such as the outer frame edge, and place points more accurately. It needs a labelled dataset and a training setup, which is outside the project's scope for now. |
 
 ## 8. Decision Log
 
@@ -69,3 +72,4 @@ flowchart LR
 | 3 | The agent runs on the server, not on the device. | The Gemini API key stays on the server instead of shipping inside the app. |
 | 4 | The Zod schemas move from the server to a shared module. | The server and the app validate annotations with the same rules, and the app can check the agent's output before drawing it. |
 | 5 | Gemini is reached through OpenRouter, not Google's API directly. | One API key and one provider package, and the model can be switched to another provider by changing its name. |
+| 6 | The agent is a prompt bar on the canvas page, not a separate tab or a chat modal. | The user can watch the lines appear on the photo while the agent works. The agent answers one request at a time, so a chat thread would promise more than it does. |

@@ -1,14 +1,16 @@
-import { rm, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 
 import express from "express";
 import type { ErrorRequestHandler, Request, RequestHandler, Response } from "express";
 import type { z } from "zod";
 import multer from "multer";
+import type { LanguageModel } from "ai";
 
+import { AgentFailedError, drawAnnotations } from "./ai/agent.ts";
 import { currentUser, newToken, requireUser, SESSION_MS, verifyPassword } from "./auth.ts";
 import type { Db, DocumentRow, ProjectRow, UserRow } from "./db.ts";
-import { addMemberSchema, createProjectSchema, createSchema, signInSchema, updateSchema } from "./schema.ts";
+import { addMemberSchema, aiRequestSchema, createProjectSchema, createSchema, signInSchema, updateSchema } from "./schema.ts";
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 
@@ -68,8 +70,8 @@ function isOwner(project: ProjectRow, res: Response, action: string): boolean {
   return false;
 }
 
-/** Builds the API without listening, so tests can run it on a random port. */
-export function createApp({ db, uploadsDir }: { db: Db; uploadsDir: string }) {
+/** Builds the API without listening, so tests can run it on a random port. Without a `model`, the AI route answers 503. */
+export function createApp({ db, uploadsDir, model }: { db: Db; uploadsDir: string; model?: LanguageModel }) {
   const app = express();
   app.use(cors);
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_IMAGE_BYTES } });
@@ -249,6 +251,33 @@ export function createApp({ db, uploadsDir }: { db: Db; uploadsDir: string }) {
       return res.status(409).json({ error: "version is stale", version: row.version });
     }
     res.json({ version: body.version + 1, updatedAt: now });
+  });
+
+  app.post("/documents/:id/ai", express.json({ limit: "5mb" }), async (req, res) => {
+    const body = parseBody(aiRequestSchema, req, res);
+    if (!body) return;
+    const row = memberDocument(req, res);
+    if (!row) return;
+    if (!model) return res.status(503).json({ error: "AI is not set up on this server" });
+
+    // Stop calling the model when the app gives up on the request.
+    const abort = new AbortController();
+    res.on("close", () => {
+      if (!res.writableFinished) abort.abort();
+    });
+    try {
+      const image = await readFile(filePath(row));
+      const annotations = await drawAnnotations(
+        { ...body, image, width: row.imageWidth, height: row.imageHeight },
+        { model, abortSignal: abort.signal },
+      );
+      res.json({ annotations });
+    } catch (e) {
+      if (abort.signal.aborted) return;
+      if (e instanceof AgentFailedError) return res.status(422).json({ error: e.message, errors: e.errors });
+      console.error(e);
+      res.status(502).json({ error: "the AI provider failed" });
+    }
   });
 
   app.delete("/documents/:id", async (req, res) => {

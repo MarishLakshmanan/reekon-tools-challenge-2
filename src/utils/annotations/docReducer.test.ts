@@ -150,6 +150,19 @@ describe("editorReducer undo", () => {
     expect(editorReducer(s, { type: "undo" })).toBe(s);
   });
 
+  it("addMany is one step: a single undo removes everything it added", () => {
+    const s0 = start();
+    const s1 = editorReducer(s0, { type: "addMany", annotations: [unassigned("u1"), unassigned("u2")] });
+    expect(s1.doc.annotations.map((a) => a.id)).toEqual(["p", "u1", "u2"]);
+    expect(s1.past).toHaveLength(1);
+    expect(editorReducer(s1, { type: "undo" }).doc.annotations).toBe(s0.doc.annotations);
+  });
+
+  it("addMany with nothing to add changes nothing", () => {
+    const s0 = start();
+    expect(editorReducer(s0, { type: "addMany", annotations: [] })).toBe(s0);
+  });
+
   it("does not record edits that change nothing", () => {
     const s0 = start();
     expect(editorReducer(s0, { type: "delete", id: "missing" })).toBe(s0);

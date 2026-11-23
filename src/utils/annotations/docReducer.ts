@@ -4,6 +4,8 @@ import type { Annotation, AnnotationDoc, MeasurementUnit, PenPath, Point, Segmen
 
 export type DocAction =
   | { type: "add"; annotation: Annotation }
+  /** Several annotations as one edit, so one Undo removes them all. */
+  | { type: "addMany"; annotations: Annotation[] }
   | { type: "movePath"; id: string; dx: number; dy: number }
   | { type: "moveAnchor"; pathId: string; anchorId: string; point: Point }
   | { type: "moveText"; id: string; position: Point }
@@ -37,6 +39,8 @@ export function applyAction(list: Annotation[], action: DocAction): Annotation[]
   switch (action.type) {
     case "add":
       return [...list, action.annotation];
+    case "addMany":
+      return action.annotations.length ? [...list, ...action.annotations] : list;
     case "movePath":
       return mapPath(list, action.id, (p) => ({
         ...p,

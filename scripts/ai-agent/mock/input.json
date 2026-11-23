@@ -1,6 +1,10 @@
 {
   "request": "mark the lines on that window",
   "image": "window.jpg",
+  "textStyle": {
+    "fontSize": 20,
+    "color": "#ffffff"
+  },
   "style": {
     "stroke": "#ff3b30",
     "strokeWidth": 5

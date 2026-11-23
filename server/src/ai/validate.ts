@@ -1,7 +1,10 @@
-import { annotationsSchema } from "../../server/src/schema.ts";
-import type { Annotation, PenPath } from "../../src/utils/annotations/types.ts";
+import { annotationsSchema } from "../../../shared/schema.ts";
+import type { Annotation, PenPath, TextLabel } from "../../../src/utils/annotations/types.ts";
 
-export type Validation = { ok: true; paths: PenPath[] } | { ok: false; errors: string[] };
+/** What the agent may add. Measurements are left to the user. */
+export type AgentAnnotation = PenPath | TextLabel;
+
+export type Validation = { ok: true; annotations: AgentAnnotation[] } | { ok: false; errors: string[] };
 
 type Context = { width: number; height: number; existing: Annotation[] };
 
@@ -36,8 +39,8 @@ function existingIds(existing: Annotation[]) {
 
 /**
  * Deterministic check of the agent's `doc.json`: valid JSON, matches the shared
- * annotations schema, and only adds pen paths that fit the photo and use new ids.
- * @returns the new paths, or every error found, worded so they can be sent back to the agent.
+ * annotations schema, and only adds pen paths and text labels that fit the photo and use new ids.
+ * @returns the new annotations, or every error found, worded so they can be sent back to the agent.
  */
 export function validateOutput(text: string, { width, height, existing }: Context): Validation {
   let json: unknown;
@@ -63,24 +66,33 @@ export function validateOutput(text: string, { width, height, existing }: Contex
     seen.add(id);
   };
 
+  const inside = ({ x, y }: { x: number; y: number }) => x >= 0 && x <= width && y >= 0 && y <= height;
+
   parsed.data.forEach((a, i) => {
     const where = `annotations.${i}`;
-    if (a.kind !== "path") {
-      errors.push(`${where}: kind is "${a.kind}", but only "path" may be added.`);
+    if (a.kind === "measurement") {
+      errors.push(`${where}: kind is "measurement", but only "path" and "text" may be added.`);
       return;
     }
     claim(a.id, where);
+    if (a.kind === "text") {
+      if (!a.text.trim()) errors.push(`${where}: text is empty.`);
+      if (!inside(a.position)) {
+        errors.push(`${where}.position: (${a.position.x}, ${a.position.y}) is outside the ${width} x ${height} image.`);
+      }
+      return;
+    }
     const min = a.closed ? 3 : 2;
     if (a.anchors.length < min) {
       errors.push(`${where}: a ${a.closed ? "closed" : "open"} path needs at least ${min} anchors, got ${a.anchors.length}.`);
     }
     a.anchors.forEach(({ id, point }, j) => {
       claim(id, `${where}.anchors.${j}`);
-      if (point.x < 0 || point.x > width || point.y < 0 || point.y > height) {
+      if (!inside(point)) {
         errors.push(`${where}.anchors.${j}: point (${point.x}, ${point.y}) is outside the ${width} x ${height} image.`);
       }
     });
   });
 
-  return errors.length ? { ok: false, errors } : { ok: true, paths: parsed.data as PenPath[] };
+  return errors.length ? { ok: false, errors } : { ok: true, annotations: parsed.data as AgentAnnotation[] };
 }

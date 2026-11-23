@@ -7,6 +7,7 @@ my-app/
   assets/          images, fonts
   scripts/         helper scripts
   server/          Express + SQLite server, its own package.json and tsconfig
+  shared/          annotation Zod schemas used by both the app and the server
   src/
     app/           ONLY routes and layouts (each file = a screen URL)
     components/    reusable UI (buttons, cards)

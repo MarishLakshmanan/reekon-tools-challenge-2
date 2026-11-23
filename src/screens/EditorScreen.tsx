@@ -1,7 +1,8 @@
 import { useImage } from "@shopify/react-native-skia";
 import { Stack, useRouter } from "expo-router";
+import { useHeaderHeight } from "expo-router/react-navigation";
 import { useEffect, useReducer, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -10,6 +11,7 @@ import { deleteRemote, getRemote, saveToServer, toLocalDoc, updateDoc } from "@/
 
 import { AnnotationCanvas } from "@/components/canvas/AnnotationCanvas";
 import { AddMeasurementRow } from "@/components/AddMeasurementRow";
+import { AiPromptBar } from "@/components/AiPromptBar";
 import { Icon } from "@/components/Icon";
 import { MeasurementList } from "@/components/MeasurementList";
 import { StatusView } from "@/components/StatusView";
@@ -44,15 +46,20 @@ export function EditorScreen({ initialDoc }: { initialDoc: AnnotationDoc }) {
   /** Segment picked with the Measure tool, waiting for an unassigned card to be tapped. */
   const [linkSegment, setLinkSegment] = useState<Segment | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [aiOpen, setAiOpen] = useState(false);
   const [addUnit, setAddUnit] = useState<MeasurementUnit>("cm");
   const { settings } = useSettings();
   const { width: windowW, height: windowH } = useWindowDimensions();
   const { bottom } = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
 
   // Resolved once: `doc.image.uri` becomes the server URL on the first Save, but the local file stays.
   const [imageUri] = useState(() => imageUriFor(initialDoc));
   const image = useImage(imageUri);
   const style = styleFor(doc.image.width);
+  // The pen and the AI draw with the same look, so both kinds of line match.
+  const penStyle = { stroke: settings.lineColor, strokeWidth: style.strokeWidth * WIDTH_FACTOR[settings.lineWidth] };
+  const textStyle = { fontSize: style.fontSize * SIZE_FACTOR[settings.textSize], color: settings.textColor };
   const annotations = draft ? [...doc.annotations, draft] : doc.annotations;
 
   // Save shortly after the last edit, and once more when leaving the screen.
@@ -199,8 +206,7 @@ export function EditorScreen({ initialDoc }: { initialDoc: AnnotationDoc }) {
               kind: "path",
               anchors: [anchor],
               closed: false,
-              stroke: settings.lineColor,
-              strokeWidth: style.strokeWidth * WIDTH_FACTOR[settings.lineWidth],
+              ...penStyle,
             },
       );
     }
@@ -231,8 +237,7 @@ export function EditorScreen({ initialDoc }: { initialDoc: AnnotationDoc }) {
         kind: "text",
         position: pendingText,
         text,
-        fontSize: style.fontSize * SIZE_FACTOR[settings.textSize],
-        color: settings.textColor,
+        ...textStyle,
       },
     });
     setPendingText(null);
@@ -285,6 +290,15 @@ export function EditorScreen({ initialDoc }: { initialDoc: AnnotationDoc }) {
               <Icon name="trash" size={22} color={colors.danger} />
             </Pressable>
             <Pressable
+              onPress={() => setAiOpen((open) => !open)}
+              // The server draws on its own copy of the photo, so it needs the first Save.
+              disabled={busy || doc.serverVersion === null}
+              hitSlop={10}
+              accessibilityLabel="Draw with AI"
+            >
+              <Icon name="sparkles" size={22} color={doc.serverVersion === null ? colors.tertiaryLabel : colors.tint} />
+            </Pressable>
+            <Pressable
               onPress={save}
               disabled={busy || !unsaved}
               hitSlop={8}
@@ -310,7 +324,7 @@ export function EditorScreen({ initialDoc }: { initialDoc: AnnotationDoc }) {
   const canvasHeight = Math.min((windowW * doc.image.height) / doc.image.width, windowH * 0.7);
 
   return (
-    <View style={styles.fill}>
+    <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={headerHeight} style={styles.fill}>
       {header}
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottom + 16 }]}>
         <AnnotationCanvas
@@ -341,11 +355,24 @@ export function EditorScreen({ initialDoc }: { initialDoc: AnnotationDoc }) {
           onRemove={(m) => dispatch({ type: "delete", id: m.id })}
         />
       </ScrollView>
+      {aiOpen && (
+        <AiPromptBar
+          docId={doc.id}
+          annotations={doc.annotations}
+          penStyle={penStyle}
+          textStyle={textStyle}
+          bottomInset={bottom}
+          onAdd={(added) => {
+            dispatch({ type: "addMany", annotations: added });
+            setAiOpen(false);
+          }}
+        />
+      )}
       {editing && (
         <MeasurementValueModal initial={editing} onConfirm={confirmEdit} onCancel={() => setEditingId(null)} />
       )}
       <TextInputModal visible={pendingText !== null} onConfirm={confirmText} onCancel={() => setPendingText(null)} />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

@@ -17,6 +17,8 @@ const ICONS = {
   pen: { ios: "pencil.tip", android: "ink_pen" },
   measure: { ios: "ruler", android: "straighten" },
   text: { ios: "textformat", android: "text_fields" },
+  sparkles: { ios: "sparkles", android: "auto_awesome" },
+  send: { ios: "arrow.up.circle.fill", android: "send" },
   done: { ios: "checkmark.circle.fill", android: "check_circle" },
 } as const;
 

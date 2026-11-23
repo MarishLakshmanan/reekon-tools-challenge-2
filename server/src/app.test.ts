@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, test } from "node:test";
 
+import { MockLanguageModelV4 } from "ai/test";
+
 import { createApp } from "./app.ts";
 import { hashPassword } from "./auth.ts";
 import { openDb } from "./db.ts";
@@ -19,6 +21,25 @@ const USERS = [
   { id: "u9", orgId: "org2", email: "z@test", name: "Z" },
 ];
 
+/** What the mock model answers with, in order. An `Error` makes that call fail. */
+const replies: (string | Error)[] = [];
+const model = new MockLanguageModelV4({
+  doGenerate: async () => {
+    const reply = replies.shift();
+    if (reply === undefined) throw new Error("no reply queued");
+    if (reply instanceof Error) throw reply;
+    return {
+      content: [{ type: "text", text: reply }],
+      finishReason: { unified: "stop", raw: undefined },
+      usage: {
+        inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+        outputTokens: { total: 1, text: 1, reasoning: undefined },
+      },
+      warnings: [],
+    };
+  },
+});
+
 let base: string;
 let uploadsDir: string;
 let close: () => void;
@@ -32,7 +53,7 @@ before(async () => {
   const passwordHash = hashPassword(PASSWORD);
   for (const u of USERS) db.insertUser({ ...u, passwordHash }, 0);
 
-  const server = createApp({ db, uploadsDir }).listen(0);
+  const server = createApp({ db, uploadsDir, model }).listen(0);
   await new Promise((resolve) => server.once("listening", resolve));
   base = `http://localhost:${(server.address() as AddressInfo).port}`;
   close = () => {
@@ -320,5 +341,103 @@ describe("documents API", () => {
     assert.equal((await get("/documents/nope")).status, 404);
     assert.equal((await put("nope", { annotations: [], version: 1 })).status, 404);
     assert.equal((await fetch(`${base}/documents/nope`, as("u1", { method: "DELETE" }))).status, 404);
+  });
+});
+
+describe("AI drawing", () => {
+  const line = (id: string, x2 = 100) => ({
+    id,
+    kind: "path",
+    anchors: [
+      { id: `${id}a1`, point: { x: 10, y: 10 } },
+      { id: `${id}a2`, point: { x: x2, y: 90 } },
+    ],
+    closed: false,
+    stroke: "#ff3b30",
+    strokeWidth: 5,
+  });
+  const reply = (...paths: unknown[]) => JSON.stringify({ annotations: paths });
+  const ask = (id: string, body: unknown = {}, user = "u1") =>
+    fetch(
+      `${base}/documents/${id}/ai`,
+      as(user, json("POST", { request: "mark the lines", annotations: [], style: { stroke: "#ff3b30", strokeWidth: 5 }, textStyle: { fontSize: 20, color: "#ffffff" }, ...(body as object) })),
+    );
+
+  function reset(...next: (string | Error)[]) {
+    replies.splice(0, replies.length, ...next);
+    model.doGenerateCalls.length = 0;
+  }
+
+  test("returns the paths the model drew", async () => {
+    await makeProject("ai1");
+    await upload("ai1", "aid1");
+    reset(reply(line("aip1")));
+    const res = await ask("aid1");
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { annotations: [line("aip1")] });
+  });
+
+  test("sends the errors back and uses the corrected answer", async () => {
+    await makeProject("ai2");
+    await upload("ai2", "aid2");
+    // The first answer has a point outside the 400 x 300 photo.
+    reset(reply(line("aip1", 999)), reply(line("aip1")));
+    const res = await ask("aid2");
+    assert.equal(res.status, 200);
+    assert.equal(model.doGenerateCalls.length, 2);
+    assert.deepEqual(await res.json(), { annotations: [line("aip1")] });
+  });
+
+  test("gives up with 422 after four retries", async () => {
+    await makeProject("ai3");
+    await upload("ai3", "aid3");
+    reset(...Array.from({ length: 5 }, () => "not json"));
+    const res = await ask("aid3");
+    assert.equal(res.status, 422);
+    assert.equal(model.doGenerateCalls.length, 5);
+  });
+
+  const label = (id: string, x = 50, y = 40) => ({
+    id,
+    kind: "text",
+    position: { x, y },
+    text: "Living room",
+    fontSize: 20,
+    color: "#ffffff",
+  });
+
+  test("returns text labels along with paths", async () => {
+    await makeProject("ai6");
+    await upload("ai6", "aid6");
+    reset(reply(line("aip1"), label("ait1")));
+    const res = await ask("aid6", { request: "mark it and label it" });
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { annotations: [line("aip1"), label("ait1")] });
+  });
+
+  test("a label outside the photo is sent back for correction", async () => {
+    await makeProject("ai7");
+    await upload("ai7", "aid7");
+    reset(reply(label("ait1", 999, 40)), reply(label("ait1")));
+    const res = await ask("aid7", { request: "label it" });
+    assert.equal(res.status, 200);
+    assert.equal(model.doGenerateCalls.length, 2);
+    assert.deepEqual(await res.json(), { annotations: [label("ait1")] });
+  });
+
+  test("a failing provider gives 502", async () => {
+    await makeProject("ai4");
+    await upload("ai4", "aid4");
+    reset(new Error("provider down"));
+    assert.equal((await ask("aid4")).status, 502);
+  });
+
+  test("only members can ask, and the body is checked first", async () => {
+    await makeProject("ai5");
+    await upload("ai5", "aid5");
+    reset(reply(line("aip1")));
+    assert.equal((await ask("aid5", {}, "u2")).status, 404);
+    assert.equal((await ask("aid5", { request: "  " })).status, 400);
+    assert.equal(model.doGenerateCalls.length, 0);
   });
 });

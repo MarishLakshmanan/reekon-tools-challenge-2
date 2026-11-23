@@ -1,21 +1,19 @@
 // Tries the drawing agent on a mock request: `npm run agent [-- image]`.
 // The request, style, and annotations come from mock/input.json; the image argument overrides its image.
-// Needs OPENROUTER_API_KEY, in the environment or in the root .env.
+// Needs OPENROUTER_API_KEY, in the environment or in server/.env. The agent itself lives in server/src/ai.
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, resolve } from "node:path";
-import { openrouter } from "@openrouter/ai-sdk-provider";
-import { ToolLoopAgent, type ModelMessage } from "ai";
 import type { Annotation, PenPath } from "../../src/utils/annotations/types.ts";
-import { validateOutput } from "./validate.mts";
+import { AgentFailedError, MAX_RETRIES, drawAnnotations, openrouterModel, type AgentAnnotation } from "../../server/src/ai/agent.ts";
 
-const MAX_RETRIES = 4;
-const MODEL = process.env.AGENT_MODEL ?? "google/gemini-4-argon";
+const MODEL = process.env.AGENT_MODEL || "google/gemini-4-argon";
 
 type Input = {
   request: string;
   /** Relative to the input file. */
   image: string;
   style: { stroke: string; strokeWidth: number };
+  textStyle: { fontSize: number; color: string };
   annotations: Annotation[];
 };
 
@@ -27,68 +25,40 @@ const image = await readFile(imagePath);
 // Read from the file itself: the server knows the real size, and a wrong size skews every point.
 const { width, height, mediaType } = imageInfo(image);
 
-const agent = new ToolLoopAgent({
-  model: openrouter(MODEL),
-  instructions: await readFile(resolve(here, "prompt.md"), "utf8"),
-  // No tools for the MVP; the annotations come in the request.
-  tools: {},
-});
-
-const messages: ModelMessage[] = [
-  {
-    role: "user",
-    content: [
-      {
-        type: "text",
-        text: [
-          `Request: "${input.request}"`,
-          `Image size: ${width} x ${height}`,
-          `Line style: stroke "${input.style.stroke}", strokeWidth ${input.style.strokeWidth}`,
-          `Existing annotations: ${JSON.stringify(input.annotations)}`,
-        ].join("\n"),
-      },
-      { type: "file", mediaType, data: image },
-    ],
-  },
-];
-
 console.log(`Model: ${MODEL}\nImage: ${basename(imagePath)} (${width} x ${height})\nRequest: "${input.request}"\n`);
 
-let paths: PenPath[] | null = null;
-for (let attempt = 0; attempt <= MAX_RETRIES && !paths; attempt++) {
-  const started = Date.now();
-  const result = await agent.generate({ messages });
-  const check = validateOutput(result.text, { width, height, existing: input.annotations });
-  const secs = ((Date.now() - started) / 1000).toFixed(1);
-  const label = attempt === 0 ? "First try" : `Retry ${attempt}/${MAX_RETRIES}`;
-  console.log(`${label} (${secs}s, ${result.usage.totalTokens ?? "?"} tokens): ${check.ok ? "valid" : "invalid"}`);
-
-  if (check.ok) {
-    paths = check.paths;
-    break;
-  }
-  for (const e of check.errors) console.log(`  - ${e}`);
-  messages.push(...result.responseMessages, {
-    role: "user",
-    content: `Your output failed validation:\n${check.errors.map((e) => `- ${e}`).join("\n")}\nReturn the corrected JSON only.`,
-  });
-}
-
-if (!paths) {
+let added: AgentAnnotation[] = [];
+try {
+  added = await drawAnnotations(
+    { request: input.request, image, mediaType: mediaType as "image/jpeg" | "image/png", width, height, style: input.style, textStyle: input.textStyle, annotations: input.annotations },
+    {
+      model: openrouterModel(),
+      onAttempt: ({ attempt, ok, errors, ms, tokens }) => {
+        const label = attempt === 0 ? "First try" : `Retry ${attempt}/${MAX_RETRIES}`;
+        console.log(`${label} (${(ms / 1000).toFixed(1)}s, ${tokens ?? "?"} tokens): ${ok ? "valid" : "invalid"}`);
+        for (const e of errors) console.log(`  - ${e}`);
+      },
+    },
+  );
+} catch (e) {
+  if (!(e instanceof AgentFailedError)) throw e;
   console.error(`\nGave up after ${MAX_RETRIES} retries.`);
   process.exit(1);
 }
 
 const outDir = resolve(here, "out", basename(imagePath, extname(imagePath)));
 await mkdir(outDir, { recursive: true });
-await writeFile(resolve(outDir, "doc.json"), JSON.stringify({ annotations: paths }, null, 2));
-await writeFile(resolve(outDir, "preview.svg"), preview([...input.annotations, ...paths]));
+await writeFile(resolve(outDir, "doc.json"), JSON.stringify({ annotations: added }, null, 2));
+await writeFile(resolve(outDir, "preview.svg"), preview([...input.annotations, ...added]));
 
-console.log(`\n${paths.length} path(s), ${paths.reduce((n, p) => n + p.anchors.length, 0)} anchor(s) added.`);
+const paths = added.filter((a): a is PenPath => a.kind === "path");
+console.log(
+  `\n${paths.length} path(s), ${paths.reduce((n, p) => n + p.anchors.length, 0)} anchor(s), ${added.length - paths.length} text label(s) added.`,
+);
 console.log(`Output:  ${resolve(outDir, "doc.json")}`);
 console.log(`Preview: ${resolve(outDir, "preview.svg")} (open in a browser)`);
 
-// The photo with every path drawn on it, existing and new, in image pixels.
+// The photo with every path and text label drawn on it, existing and new, in image pixels.
 function preview(annotations: Annotation[]) {
   const shapes = annotations
     .filter((a): a is PenPath => a.kind === "path")
@@ -101,10 +71,16 @@ function preview(annotations: Annotation[]) {
       return `<${tag} points="${pts}" fill="none" stroke="${p.stroke}" stroke-width="${p.strokeWidth}"/>${dots}`;
     })
     .join("\n");
+  // The label's position is its baseline start, like the canvas draws it.
+  const labels = annotations
+    .flatMap((a) => (a.kind === "text" ? [a] : []))
+    .map((t) => `<text x="${t.position.x}" y="${t.position.y}" font-size="${t.fontSize}" fill="${t.color}" stroke="#000" stroke-width="${t.fontSize / 30}" paint-order="stroke" font-family="sans-serif">${escapeXml(t.text)}</text>`)
+    .join("\n");
   const href = `data:${mediaType};base64,${image.toString("base64")}`;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}">
 <image href="${href}" width="${width}" height="${height}"/>
 ${shapes}
+${labels}
 </svg>
 `;
 }
@@ -125,4 +101,8 @@ function imageInfo(buf: Buffer) {
     }
   }
   throw new Error("Image must be a PNG or JPEG.");
+}
+
+function escapeXml(text: string) {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
