@@ -2,19 +2,20 @@
 
 ## What I built
 
-Dana takes a photo of the space and lays it out on top of the photo. She draws the outline with a pen tool, marks features with text labels, and attaches measurements to the lines she drew. Her work autosaves on the phone, and she taps **Save** to send it to the server. Marcus opens the same project in a browser on his iPad. He can pan and zoom the layout, inspect each measurement, and fix values or labels. Users, one organization, and shared projects sit on top of this.
+Dana takes a photo of the space and lays it out on top of the photo. She draws the outline with a pen tool, marks features with text labels, and attaches measurements to the lines she drew. Her work autosaves on the phone, and she taps **Save** to send it to the server. Marcus opens the same project in a browser on his iPad. He can pan and zoom the layout, inspect each measurement, and fix values or labels. Users, one organization, and shared projects sit on top of this. As a bonus, an AI agent can draw pen paths and text labels on the photo from a typed request.
 
 ## Key interaction decisions
 
 - **Draw with points on the photo.** Dana taps to drop points that join into a shape, and drags any point to reshape it. Because of the camera angle, a rectangular deck rarely looks like a rectangle in a photo. Dana bends the shape to match the photo, and the tape still records the real length.
 - **Link tape readings to lines.** Each reading arrives as a card, and Dana links it to a line in the shape. A reading can also stay unlinked on the document.
-- **Canvas tools for the field.** Dana can zoom in to place points precisely, add text labels to explain what something is, and undo mistakes. Line and text color and size are settings, because some colors disappear against some photos.
-- **Marcus reviews and adjusts, but doesn't draw.** His view has no drawing tools. He zooms and pans around the photo to read the measurements clearly. He can edit measurement values and text labels, because he may need to adjust a number while he works out costs, and he shouldn't have to call Dana to change it.
+- **Canvas tools for the field.** Dana can zoom in to place points, add text labels to explain what something is, and undo mistakes. Line and text color and size are settings, because some colors disappear against some photos.
+- **Marcus reviews and adjusts, but doesn't draw.** His view has no drawing tools. He zooms and pans around the photo to read the measurements. He can edit measurement values and text labels, because he may need to adjust a number while he works out costs, and he shouldn't have to call Dana to change it.
+- **AI drawing as a prompt bar.** Dana types a request on the canvas page, and the agent's lines appear on the photo in her pen and text settings. One Undo removes everything the agent added. The agent runs on the server, so the API key stays out of the app. The server and the app both check its output against the shared annotation schemas before anything is drawn.
 - **Shared projects.** Users belong to an organization and can join several projects. Each project has an owner who adds and removes members, and every member can add and update its documents. When two people save the same document at once, the conflict is caught instead of one person's work being overwritten.
 
 ## How it fits Dana and Marcus
 
-**Dana** works outside in sun, wind, rain, and dust, often with gloves on and no signal. She takes the photo once, then goes out and measures without holding the phone. The tape sends each reading to the app. Later she links each reading to its line and saves. Everything autosaves on the phone and syncs to the server only when she taps Save, so a weak connection never costs her work. Line color, line width, and text size are settings, so the drawing stays readable in bright sun. She lays out several spaces a day, often with a different crew on each job. Each job is its own project with its own members, so everyone on that crew works on the same layout.
+**Dana** works outside in sun, wind, rain, and dust, often with gloves on and no signal. She takes the photo once, then goes out and measures without holding the phone. The tape sends each reading to the app (simulated for now, see below). Later she links each reading to its line and saves. Everything autosaves on the phone and syncs to the server only when she taps Save, so a weak connection never costs her work. Line color, line width, and text size are settings, so the drawing stays readable in bright sun. She lays out several spaces a day, often with a different crew on each job. Each job is its own project with its own members, so everyone on that crew works on the same layout.
 
 **Marcus** sees everything Dana has saved, in the web app on his iPad. He zooms and pans to read the layout, and can open any measurement or label to check it or correct it before using it for quotes, material orders, and cut lists.
 
@@ -29,6 +30,7 @@ Dana takes a photo of the space and lays it out on top of the photo. She draws t
 | `expo-secure-store` | The session token, kept in the keychain or keystore. |
 | `expo-router` | Routes and the sign-in gate. |
 | Server: `express`, `multer`, `zod`, `node:sqlite`, `node:crypto` | API, image uploads, input checks, the database, and password hashing. There is no native build step and no BaaS. |
+| Server: `ai`, `@openrouter/ai-sdk-provider` | The AI agent and its retry loop, using a Gemini model through OpenRouter. |
 
 **Considered and rejected:**
 - Drawing on a blank canvas, because drawing a space by hand on a phone is hard and the shapes don't come out accurate.
@@ -42,13 +44,17 @@ Dana takes a photo of the space and lays it out on top of the photo. She draws t
 - MinIO or S3, because image files in a folder are enough for now.
 - JWTs, because session rows make sign-out a single row delete.
 - Clerk or Supabase Auth, because the user list is fixed and seeded.
+- Running the AI agent on the device, because the API key would ship inside the app.
+- A dedicated object detection model for the AI agent, because Gemini can already locate objects, and a second model is one more service to run.
 
 ## What I cut, and what's next with another week
 
 - **Real Bluetooth input.** I planned a small tool that sends readings over BLE the way a tape does, with the app receiving them. Expo Go has no BLE library, and adding one needs a development build. For now the readings are simulated.
-- **Sign-up and multiple organizations.** Right now there is only sign-in, with one seeded organization. Next I would add proper sign-up, let users create and join more organizations, and give each organization its own projects. Roles on project members would let some members only view.
+- **Sign-up and multiple organizations.** Right now there is only sign-in, with one seeded organization. Next I would add sign-up, let users create and join more organizations, and give each organization its own projects. Roles on project members would let some members only view.
 - **Object storage for images.** Photos are files in a server folder. Next I would move them to S3 or another object store. The database stores only the image path, so only the upload and download code changes.
-- **A more robust UI.** Polish the screens, and add clearer loading, error, and offline states.
+- **Clearer loading, error, and offline states.** Next I would make each screen show what is loading, what failed, and what still works offline.
 - **Live updates for Marcus.** He sees Dana's work after she taps Save and he reloads the photo. Next I would push changes over WebSockets or server-sent events.
 - **A calculator for Marcus.** He could total lengths and work out areas while he reviews.
+- **A Q&A tab for each project.** Project members could post questions and replies to each other inside the project, instead of calling or texting about a photo.
+- **An AI agent for reviewers.** Marcus, or anyone reviewing the measurements, could ask an agent to price the materials from the measurements, find the cheapest place to buy them, and compare measurements to show how they differ.
 - **AI photo enhancement.** When a photo comes out blurry or dark, an AI model would sharpen it without changing what's in it, so lines and labels are easier to place.

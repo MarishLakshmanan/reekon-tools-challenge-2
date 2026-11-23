@@ -1,8 +1,8 @@
-# Reekon tools challenge - 2 
+# Reekon Tools Challenge 2
 
-This is my submission for **Reekon Tools Challenge 2**: a photo measurement app built with Expo and React Native. It takes a photo, draws paths on it, attaches measurements and text labels, and saves it to a project that your team can open on another phone or in the browser.
+This is my submission for **Reekon Tools Challenge 2**: a photo measurement app built with Expo and React Native. You take a photo, draw paths on it, attach measurements and text labels, and save it to a project that your team can open on another phone or in the browser.
 
-The app runs in **Expo Go**, so you don't need a development build. The data is stored by a small Express + SQLite server in [server/](server/).
+The app runs in **Expo Go**, so you don't need a development build. A small Express + SQLite server in [server/](server/) stores the data.
 
 ## Requirements
 
@@ -62,6 +62,32 @@ npx expo start
 
 Scan the QR code with Expo Go (Android) or the Camera app (iOS). You can also press `a` to open the app on an Android emulator or `i` to open it on an iOS simulator.
 
+## AI agent
+
+The editor has an AI button that draws pen paths and text labels from a typed request. The agent runs on the API server and needs an OpenRouter API key.
+
+1. Copy the server's example env file:
+
+   ```bash
+   cp server/.env.example server/.env
+   ```
+
+2. Set `OPENROUTER_API_KEY` in `server/.env` to your OpenRouter key. `AGENT_MODEL` is optional and defaults to `google/gemini-4-argon`.
+3. Restart the API server (`npm run server`).
+
+Without the key, the server still runs, but the AI route is off and the app shows "AI isn't set up on the server."
+
+In the app, open a photo and tap the sparkles button in the header. The button turns on after the photo's first Save, because the agent draws on the server's copy of the photo.
+
+To try the agent without the app, run:
+
+```bash
+npm run agent              # uses scripts/ai-agent/mock/input.json and its image
+npm run agent -- photo.jpg # same request, on another image
+```
+
+It reads the key from `server/.env` and writes its output to `scripts/ai-agent/out/`.
+
 ## Test users
 
 All users are in the **Reekon Interiors** organization.
@@ -77,7 +103,7 @@ There is no sign-up. To try sharing, sign in as two different users on two devic
 
 ## Web app
 
-Start the web app directly:
+Start the web app:
 
 ```bash
 npx expo start --web
@@ -101,35 +127,43 @@ If your phone can't reach your computer (for example, on a guest network), start
 | `npm run server:install` | Install the API server's dependencies |
 | `npm run server` | Start the API server in watch mode |
 | `npm run seed` | Seed the organization and test users |
+| `npm run agent` | Try the AI agent on a mock request |
 | `npm test` | Run the app tests |
+| `npm test --prefix server` | Run the server tests |
 | `npm run lint` | Lint the app |
 
 ## Project layout
 
 ```
-src/app/       routes and layouts (Expo Router)
-src/screens/   screen UIs
+src/app/        routes and layouts (Expo Router)
+src/screens/    screen UIs
 src/components/ reusable UI
-src/api/       code that calls the server
-server/        Express + SQLite API, with its own package.json
-docs/          phase-by-phase design docs
+src/api/        code that calls the server
+server/         Express + SQLite API, with its own package.json
+server/src/ai/  the AI agent, its prompt, and its output validator
+shared/         annotation Zod schemas used by both the app and the server
+scripts/        helper scripts, including the AI agent test script
+docs/           phase-by-phase design docs
 ```
 
 See [docs/workspace.md](docs/workspace.md) for the full layout.
 
 ## Decisions and design docs
 
-- **[NOTES.md](NOTES.md)** has a short summary of the main decisions I made and why I made them.
-- **[docs/](docs/)** has the full implementation, phase by phase:
+- **[NOTES.md](NOTES.md)** has a short summary of the main decisions and why I made them.
+- **[docs/](docs/)** has the design of each phase:
   1. [Phase 1: Skia canvas annotation](docs/phase-one/phase-one.md)
   2. [Phase 2: API and database](docs/phase-two/phase-two.md) ([sync logic](docs/phase-two/sync-logic.md))
   3. [Phase 3: Users, organization, and projects](docs/phase-three/phase-three.md)
   4. [Phase 4: Canvas screen](docs/phase-four/phase-four.md)
   5. [Phase 5: Web build](docs/phase-five/phase-five.md)
+  6. [Bonus: AI agent](docs/bonus-ai/bonus-ai.md)
 
 ## Troubleshooting
 
 - **`EXPO_PUBLIC_API_URL is not set`**: create `.env` (step 2), then restart Expo.
 - **Sign-in fails or requests time out on the phone**: `localhost` on a phone points to the phone itself. Use your computer's LAN IP or a tunnel URL.
 - **Invalid email or password**: run `npm run seed`.
+- **AI isn't set up on the server**: set `OPENROUTER_API_KEY` in `server/.env`, then restart the server.
+- **The AI button is greyed out**: save the photo once first.
 - **Stale env value or other odd cache issues**: run `npx expo start --clear`.
