@@ -1,6 +1,6 @@
 # Reekon Tools Challenge 2
 
-This is my submission for **Reekon Tools Challenge 2**: a photo measurement app built with Expo and React Native. You take a photo, draw paths on it, attach measurements and text labels, and save it to a project that your team can open on another phone or in the browser.
+My submission for **Reekon Tools Challenge 2**: a photo measurement app built with Expo and React Native. Take a photo, draw on it, attach measurements and labels, and save it to a shared project. Your team can open it on another phone or in the browser, and chat inside the project.
 
 The app runs in **Expo Go**, so you don't need a development build. A small Express + SQLite server in [server/](server/) stores the data.
 

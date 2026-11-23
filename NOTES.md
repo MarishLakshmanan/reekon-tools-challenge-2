@@ -2,7 +2,7 @@
 
 ## What I built
 
-Dana takes a photo of the space and lays it out on top of the photo. She draws the outline with a pen tool, marks features with text labels, and attaches measurements to the lines she drew. Her work autosaves on the phone, and she taps **Save** to send it to the server. Marcus opens the same project in a browser on his iPad. He can pan and zoom the layout, inspect each measurement, and fix values or labels. Users, one organization, and shared projects sit on top of this. As a bonus, an AI agent can draw pen paths and text labels on the photo from a typed request.
+Dana takes a photo of the space and lays it out on top of the photo. She draws the outline with a pen tool, marks features with text labels, and attaches measurements to the lines she drew. Her work autosaves on the phone, and she taps **Save** to send it to the server. Marcus opens the same project in a browser on his iPad. He can pan and zoom the layout, inspect each measurement, and fix values or labels. Users, one organization, and shared projects sit on top of this. Members of a project can chat with each other inside it. As a bonus, an AI agent can draw pen paths and text labels on the photo from a typed request.
 
 ## Key interaction decisions
 
@@ -12,6 +12,7 @@ Dana takes a photo of the space and lays it out on top of the photo. She draws t
 - **Marcus reviews and adjusts, but doesn't draw.** His view has no drawing tools. He zooms and pans around the photo to read the measurements. He can edit measurement values and text labels, because he may need to adjust a number while he works out costs, and he shouldn't have to call Dana to change it.
 - **AI drawing as a prompt bar.** Dana types a request on the canvas page, and the agent's lines appear on the photo in her pen and text settings. One Undo removes everything the agent added. The agent runs on the server, so the API key stays out of the app. The server and the app both check its output against the shared annotation schemas before anything is drawn.
 - **Shared projects.** Users belong to an organization and can join several projects. Each project has an owner who adds and removes members, and every member can add and update its documents. When two people save the same document at once, the conflict is caught instead of one person's work being overwritten.
+- **Project chat.** Each project has a chat for its members, so Dana and Marcus can ask about a photo without leaving the app. It works the same on the phone and the web. New messages load when the chat opens, on pull to refresh, with a check button, and after a send. There is no live connection to keep open.
 
 ## How it fits Dana and Marcus
 
@@ -53,8 +54,7 @@ Dana takes a photo of the space and lays it out on top of the photo. She draws t
 - **Sign-up and multiple organizations.** Right now there is only sign-in, with one seeded organization. Next I would add sign-up, let users create and join more organizations, and give each organization its own projects. Roles on project members would let some members only view.
 - **Object storage for images.** Photos are files in a server folder. Next I would move them to S3 or another object store. The database stores only the image path, so only the upload and download code changes.
 - **Clearer loading, error, and offline states.** Next I would make each screen show what is loading, what failed, and what still works offline.
-- **Live updates for Marcus.** He sees Dana's work after she taps Save and he reloads the photo. Next I would push changes over WebSockets or server-sent events.
+- **Live updates.** Marcus sees Dana's work after she taps Save and he reloads the photo, and new chat messages show up only when someone checks. Next I would push both over WebSockets or server-sent events.
 - **A calculator for Marcus.** He could total lengths and work out areas while he reviews.
-- **A Q&A tab for each project.** Project members could post questions and replies to each other inside the project, instead of calling or texting about a photo.
 - **An AI agent for reviewers.** Marcus, or anyone reviewing the measurements, could ask an agent to price the materials from the measurements, find the cheapest place to buy them, and compare measurements to show how they differ.
 - **AI photo enhancement.** When a photo comes out blurry or dark, an AI model would sharpen it without changing what's in it, so lines and labels are easier to place.
