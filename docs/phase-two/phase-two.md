@@ -12,7 +12,7 @@ Server (its own `server/` folder and `package.json`):
 | --- | --- |
 | `express` | HTTP server and routing. |
 | `multer` | Reads the multipart upload that carries the image. |
-| `zod` | Validates the annotations JSON before it is stored, so bad data never reaches the database. |
+| `zod` | Validates the annotations JSON before it is stored. |
 | `@types/express`, `@types/multer`, `@types/node` | Types. |
 
 Built into Node 26, no package needed:
@@ -68,11 +68,7 @@ Invalid annotations return `400`; unknown ids return `404`.
 
 - **Compress on capture:** right after a photo is taken or picked, resize it so the longest side is at most 2048 px and save it as JPEG at quality 0.8. This happens before any annotation is drawn.
 - **Save button:** in the editor. The first Save sends `POST` (image + annotations), later ones send `PUT`. Unsaved photos are marked on the home screen.
-- **Sync on home screen open:** call `GET /documents` and compare each `version` with the local `serverVersion`:
-  - Not on this phone → download its `doc.json` (via `GET /documents/:id`), then its image into the local folder (see Local Files).
-  - Server ahead, no unsaved local changes → replace the local `doc.json` with the server's.
-  - Server ahead **and** unsaved local changes → conflict. Keep the local version and mark it; the user picks "keep mine" (overwrite the server) or "use server" (discard local edits).
-  - Synced locally but gone from the server, no unsaved changes → deleted on another device, so remove it locally.
+- **Sync on home screen open:** compares each photo's server `version` with the local `serverVersion`. The cases are in [sync-logic.md](sync-logic.md).
 - **Delete photo:** a Delete button in the editor header, with a confirm dialog. It calls `DELETE` on the server if the photo was ever uploaded, then removes the local folder. If the server call fails, nothing is deleted and the user sees an error.
 
 ## 6. Local Files
@@ -93,14 +89,14 @@ Invalid annotations return `400`; unknown ids return `404`.
 
 | # | Decision | Why |
 | --- | --- | --- |
-| 1 | Save locally, sync to the server only when the user taps Save. | Work survives crashes, no signal, and a forgotten Save. No network request per edit. Save gives the user a clear "it's on the server" moment. The image is uploaded on the first Save, so photos can still be taken offline. |
-| 2 | Store images as files in a server folder, not in MinIO. | One server and one user; MinIO is another service to run for no gain. The DB only stores the path, so moving to MinIO/S3 later only changes where files are written. |
-| 3 | Not files only (JSON + image served as files). | SQLite would do nothing: listing would mean opening every file, with no transactions, sorting, or filtering. |
+| 1 | Save locally, sync to the server only when the user taps Save. | Work survives crashes and lost signal, and edits make no network requests. Photos can be taken offline; the image is uploaded on the first Save. |
+| 2 | Store images as files in a server folder, not in MinIO. | One server and one user; MinIO would be another service to run. The DB only stores the path, so moving to MinIO/S3 later only changes where files are written. |
+| 3 | Store documents in SQLite, not as JSON files only. | Without a database, listing means opening every file, with no transactions, sorting, or filtering. |
 | 4 | Not one table per annotation type. | The app always reads and writes a whole document. Separate tables mean joins on every read, a diff or delete-and-reinsert on every save, the delete cascade written twice (reducer and SQL), and a migration for every new annotation type. Split later only if we need to query single annotations across photos. |
 | 5 | The app generates the document id. | A photo has a stable id before it ever reaches the server, and a retried upload can't create a second copy. |
 | 6 | Reject stale saves with a `version` number (`409`). | Two devices editing the same photo must not silently overwrite each other. |
 | 7 | Compress the photo when it is taken, not just before upload. | Annotations are stored in image pixels. Compressing first means the local photo, the uploaded photo, and every coordinate all match, so nothing has to be rescaled. It also shrinks the local copy. |
 | 8 | Deleting a synced photo needs the server to be reachable. | Deleting only locally would leave the photo on the server with nothing in the app to remove it later. |
-| 9 | Use the same `version` number to download from the server: when the server is ahead, replace only `doc.json`. | One version number tracks sync in both directions, which keeps synchronization simple and stable. Images never change, so an update is just a small JSON download. |
+| 9 | Use the same `version` number to download from the server: when the server is ahead, replace only `doc.json`. | One version number tracks sync in both directions. Images never change, so an update is a small JSON download. |
 | 10 | The database stores the image path, not the full URL. | The server's address differs between the emulator, a phone, and a changed LAN IP. Building the URL per request keeps stored data valid. |
 | 11 | Download images into the local folder; the server URL is only a fallback. | Downloaded photos then work offline like photos taken on the phone. The local file is found by id, so `doc.json` doesn't need a second, local URI. |

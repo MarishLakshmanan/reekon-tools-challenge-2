@@ -2,7 +2,7 @@
 
 ## 1. Goal
 
-Improve the canvas screen by adding pinch-zoom and pan, stopping tall photos from overflowing on iPhone, making the editor scrollable with a list of measurement cards, adding undo for the last five edits, and adding on-device settings for line and text style.
+Add pinch-zoom and pan to the canvas, stop tall photos from overflowing on iPhone, make the editor scrollable with a list of measurement cards, add undo for the last five edits, and add on-device settings for line and text style.
 
 ## 2. Dependencies
 

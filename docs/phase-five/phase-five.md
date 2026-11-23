@@ -51,13 +51,13 @@ No new packages. The web build uses CanvasKit, Skia's web runtime, which comes w
 
 ## 6. Layout
 
-- On a wide window the app is a centred column, 960 px at most, on a grey page background. On a phone the column is the full width, so nothing changes.
+- On a wide window the app is a centered column, 960 px at most, on a grey page background. On a phone the column is the full width, so nothing changes.
 - Measurement cards are squares in a wrapping grid, with the color bar on the top edge and the remove button in the corner. This applies to both the phone and the web.
 
 ## 7. Decision Log
 
 | # | Decision | Why |
 | --- | --- | --- |
-| 1 | The web uses its own canvas component instead of the phone's annotation canvas. | Web input is mouse wheel zoom, click-drag pan, and click to edit. Adding that beside the phone's touch gestures and drawing tools would clutter the most complex component in the app. |
+| 1 | The web uses its own canvas component instead of the phone's annotation canvas. | Web input is mouse wheel zoom, click-drag pan, and click to edit. Adding that to the phone canvas, which already holds the touch gestures and drawing tools, would make it harder to change. |
 | 2 | Other screens are shared, with a platform check that renders the web or phone version of the parts that differ. | The differences are small, such as hidden buttons and a different data source, so separate web files would duplicate whole screens for a few lines. |
 | 3 | Web edits are sent straight to the server and rejected on a stale version, with no local copy or sync. | The server's version check already prevents lost updates, and nothing on the web needs merging or retrying. |

@@ -36,7 +36,6 @@ Installed in the server.
 ```mermaid
 flowchart LR
     A["Input"] --> B["Agent"]
-    B <-.-> T["Tools"]
     B --> C["Output"]
     C --> D{"Validator"}
     D -- "Invalid: retry" --> B
@@ -46,7 +45,6 @@ flowchart LR
 ## 5. Agent Tools
 
 - No tools for the MVP. The current annotations come with the request and are given to the agent in its prompt.
-- Tools will be added later; the workflow keeps a place for them.
 
 ## 6. After the Agent Draws
 
@@ -60,16 +58,16 @@ flowchart LR
 
 | Option | Why not now |
 | --- | --- |
-| A dedicated object detection model, such as Grounding DINO or OWLv2, to find the object before drawing | These models give more accurate coordinates, but Gemini is enough for the MVP and adding another model is outside the project's scope. A possible upgrade later. |
-| Fine-tuning a model on photos with lines the users drew themselves | The model would learn where this app's lines belong, such as the outer frame edge, and place points more accurately. It needs a labelled dataset and a training setup, which is outside the project's scope for now. |
+| A dedicated object detection model, such as Grounding DINO or OWLv2, to find the object before drawing | More accurate coordinates, but Gemini is enough for the MVP and a second model is outside the project's scope. |
+| Fine-tuning a model on photos with lines the users drew themselves | The model would learn where this app's lines belong, such as the outer frame edge. It needs a labeled dataset and a training setup, which is outside the project's scope. |
 
 ## 8. Decision Log
 
 | # | Decision | Why |
 | --- | --- | --- |
-| 1 | The agent is built with the Vercel AI SDK. | It handles tool calls, image input, and retries, and can switch model providers without rewriting the agent. |
+| 1 | The agent is built with the Vercel AI SDK. | It handles image input, retries, and tool calls, and the model provider can change without rewriting the agent. |
 | 2 | The agent uses a Gemini model. | Gemini models are trained to locate objects and return bounding boxes, so they should place points more accurately than models trained mainly to answer questions about an image. Not yet tested. |
-| 3 | The agent runs on the server, not on the device. | The Gemini API key stays on the server instead of shipping inside the app. |
+| 3 | The agent runs on the server, not on the device. | The OpenRouter API key stays on the server instead of shipping inside the app. |
 | 4 | The Zod schemas move from the server to a shared module. | The server and the app validate annotations with the same rules, and the app can check the agent's output before drawing it. |
-| 5 | Gemini is reached through OpenRouter, not Google's API directly. | One API key and one provider package, and the model can be switched to another provider by changing its name. |
-| 6 | The agent is a prompt bar on the canvas page, not a separate tab or a chat modal. | The user can watch the lines appear on the photo while the agent works. The agent answers one request at a time, so a chat thread would promise more than it does. |
+| 5 | Gemini is reached through OpenRouter, not Google's API directly. | One API key and one provider package; switching to another model is a name change. |
+| 6 | The agent is a prompt bar on the canvas page, not a separate tab or a chat modal. | The user sees the lines appear on the photo. The agent answers one request at a time and keeps no conversation, so a chat thread doesn't fit. |

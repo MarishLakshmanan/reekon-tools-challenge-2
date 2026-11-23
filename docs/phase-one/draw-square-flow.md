@@ -1,6 +1,6 @@
 # Drawing a Square — Flow
 
-A square is a pen path with four anchors and `closed: true`. The app does not know it is a square; it is just four taps.
+A square is a pen path with four anchors and `closed: true`.
 
 ## The data
 
@@ -20,7 +20,7 @@ All three are types in [types.ts](../../src/utils/annotations/types.ts). The log
 
 1. The tap gesture in [AnnotationCanvas.tsx](../../src/components/canvas/AnnotationCanvas.tsx) runs on the UI thread.
 2. `toImagePoint(screenX, screenY, view)` turns the screen point into an image point, undoing zoom and pan.
-3. Tolerance is `HIT_SLOP_PX / scale`, so a 22-pixel touch area stays the same on screen at any zoom level.
+3. Tolerance is `HIT_SLOP_PX / scale`, so the touch area is the same size on screen at any zoom.
 4. `onTap(point, tolerance)` moves to the JS thread and calls `handleTap` in `EditorScreen`.
 5. There is no draft yet, so `handleTap` creates one:
    - `id: makeId()`, one anchor `{ id: makeId(), point }`, `closed: false`
@@ -33,7 +33,7 @@ The draft is React state only. It is **not** in the document yet, so it is not s
 
 Each tap adds `{ id: makeId(), point }` to `draft.anchors`.
 
-The canvas receives `[...doc.annotations, draft]`. `PathShape` draws it with `Skia.Path.Polygon(pathPoints(path), closed)`, so a new line appears after each tap.
+The canvas receives `[...doc.annotations, draft]`. `PathShape` draws it with `Skia.Path.Polygon(pathPoints(path), closed)`.
 
 ### 4. Tap the first corner again to close
 
@@ -61,19 +61,5 @@ The **Finish** button calls `finishPath(false)` instead. That gives an open path
 ### 6. (Optional) Drag a corner
 
 1. With the Select tool, the pan gesture calls `pickDragTarget(point, …)`. Anchors are checked first, so it returns `{ kind: "anchor", pathId, anchorId, origin }`.
-2. While the finger moves, only a shared value changes. On the UI thread, `applyAction(doc, dragToAction(drag))` gives a live preview with no React re-render.
+2. While the finger moves, only a shared value changes. On the UI thread, `applyAction(doc, dragToAction(drag))` draws the preview.
 3. When the finger lifts, the same `moveAnchor` action is dispatched once. The measurement follows because it points at the anchor by id.
-
-## Function inputs and outputs
-
-| Function | Input | Output |
-| --- | --- | --- |
-| `toImagePoint` | screen x, y + view transform | image point |
-| `handleTap` (pen) | image point, tolerance | new or longer draft, or a closed path |
-| `pathPoints` | PenPath | list of points for Skia |
-| `applyAction` | annotations + action | new annotations (pure) |
-| `hitSegment` | point, annotations, tolerance | edge ids or null |
-| `findMeasurement` | annotations, edge | measurement on that edge |
-| `measurementLayout` | measurement, annotations, fontSize | edge ends + label position |
-| `pickDragTarget` | point, annotations, tolerance, fontSize | what to drag |
-| `dragToAction` | drag target + delta | `moveAnchor` / `movePath` / `moveText` action |

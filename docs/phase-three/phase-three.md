@@ -156,8 +156,8 @@ The fixed `project` folder from Phase 2 becomes the real project id. Everything 
 
 | # | Decision | Why |
 | --- | --- | --- |
-| 1 | No sign-up; users and the organization come from a seed script. | The user list is fixed for now. Sign-up adds email checks, password reset, and invites, none of which we need yet. |
-| 2 | One organization only, but the schema has `organizations` and `org_id`. | Only one org exists today, but keeping the table means adding a second org later is data, not a migration. |
+| 1 | No sign-up; users and the organization come from a seed script. | The user list is fixed. Sign-up needs email checks, password reset, and invites. |
+| 2 | One organization only, but the schema has `organizations` and `org_id`. | Adding a second org later is data, not a migration. |
 | 3 | A user belongs to exactly one organization (`users.org_id`, no join table). | Simplest model that fits. Change to an `org_members` table only if a user ever needs several orgs. |
 | 4 | No per-member permissions; every project member can read, write, and delete. | Fine-grained roles (read-only, can-measure, etc.) are possible later as a `role` column on `project_members`. Only member management and project deletion are restricted, and that is answered by `projects.owner_id`. |
 | 5 | Opaque session tokens in a `sessions` table, not JWTs. | One server and one database, so a lookup per request is cheap. Sign-out and revoking are a row delete; a JWT stays valid until it expires. |
