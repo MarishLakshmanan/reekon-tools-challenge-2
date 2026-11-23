@@ -10,7 +10,16 @@ import type { LanguageModel } from "ai";
 import { AgentFailedError, drawAnnotations } from "./ai/agent.ts";
 import { currentUser, newToken, requireUser, SESSION_MS, verifyPassword } from "./auth.ts";
 import type { Db, DocumentRow, ProjectRow, UserRow } from "./db.ts";
-import { addMemberSchema, aiRequestSchema, createProjectSchema, createSchema, signInSchema, updateSchema } from "./schema.ts";
+import {
+  addMemberSchema,
+  aiRequestSchema,
+  createProjectSchema,
+  createSchema,
+  messagesQuerySchema,
+  sendMessageSchema,
+  signInSchema,
+  updateSchema,
+} from "./schema.ts";
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 
@@ -190,6 +199,22 @@ export function createApp({ db, uploadsDir, model }: { db: Db; uploadsDir: strin
     if (req.params.userId === project.ownerId) return res.status(400).json({ error: "the owner can't be removed" });
     if (!db.removeMember(project.id, String(req.params.userId))) return notFound(res);
     res.status(204).end();
+  });
+
+  app.get("/projects/:id/messages", (req, res) => {
+    const project = memberProject(req, res);
+    if (!project) return;
+    const query = messagesQuerySchema.safeParse(req.query);
+    if (!query.success) return res.status(400).json({ error: query.error.issues });
+    res.json(db.listMessages(project.id, query.data.after));
+  });
+
+  app.post("/projects/:id/messages", express.json(), (req, res) => {
+    const project = memberProject(req, res);
+    if (!project) return;
+    const body = parseBody(sendMessageSchema, req, res);
+    if (!body) return;
+    res.status(201).json(db.insertMessage(project.id, currentUser(res).id, body.body, Date.now()));
   });
 
   app.get("/projects/:id/documents", (req, res) => {

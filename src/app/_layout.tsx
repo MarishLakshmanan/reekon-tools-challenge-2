@@ -35,6 +35,7 @@ function Routes() {
         <Stack.Screen name="settings" options={{ title: "Settings" }} />
         <Stack.Screen name="projects/[projectId]/index" options={{ title: "Project" }} />
         <Stack.Screen name="projects/[projectId]/camera" options={{ title: "Camera" }} />
+        <Stack.Screen name="projects/[projectId]/chat" options={{ title: "Chat" }} />
         {/* Opaque on iOS 26, where headers are transparent by default and the photo would draw under it. */}
         <Stack.Screen
           name="projects/[projectId]/editor/[id]"

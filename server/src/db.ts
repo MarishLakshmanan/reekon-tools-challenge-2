@@ -33,6 +33,15 @@ export type ProjectRow = {
   createdAt: number;
 };
 
+export type MessageRow = {
+  id: number;
+  projectId: string;
+  userId: string;
+  userName: string;
+  body: string;
+  createdAt: number;
+};
+
 type ProjectSummary = ProjectRow & { memberCount: number; documentCount: number };
 
 type SqlDocument = {
@@ -51,6 +60,7 @@ type SqlDocument = {
 type SqlUser = { id: string; org_id: string; email: string; name: string; password_hash: string };
 type SqlProject = { id: string; org_id: string; owner_id: string; name: string; created_at: number };
 type SqlProjectSummary = SqlProject & { member_count: number; document_count: number };
+type SqlMessage = { id: number; project_id: string; user_id: string; user_name: string; body: string; created_at: number };
 
 function documentFromSql(row: SqlDocument): DocumentRow {
   return {
@@ -74,6 +84,19 @@ function userFromSql(row: SqlUser): UserRow {
 function projectFromSql(row: SqlProject): ProjectRow {
   return { id: row.id, orgId: row.org_id, ownerId: row.owner_id, name: row.name, createdAt: row.created_at };
 }
+
+function messageFromSql(row: SqlMessage): MessageRow {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    userId: row.user_id,
+    userName: row.user_name,
+    body: row.body,
+    createdAt: row.created_at,
+  };
+}
+
+const MESSAGE_PAGE = 200;
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS organizations (
@@ -125,7 +148,17 @@ const SCHEMA = `
     updated_at   INTEGER NOT NULL
   );
 
+  -- The id only grows, so "id > last seen" finds new messages; timestamps can tie.
+  CREATE TABLE IF NOT EXISTS messages (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    user_id    TEXT NOT NULL REFERENCES users(id),
+    body       TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+
   CREATE INDEX IF NOT EXISTS documents_project ON documents(project_id);
+  CREATE INDEX IF NOT EXISTS messages_project ON messages(project_id, id);
   CREATE INDEX IF NOT EXISTS project_members_user ON project_members(user_id);
 `;
 
@@ -189,6 +222,15 @@ export function openDb(path: string) {
       WHERE id = ? AND version = ?
     `),
     deleteDoc: db.prepare("DELETE FROM documents WHERE id = ?"),
+
+    insertMessage: db.prepare("INSERT INTO messages (project_id, user_id, body, created_at) VALUES (?, ?, ?, ?)"),
+    messagesAfter: db.prepare(`
+      SELECT m.*, u.name AS user_name FROM messages m JOIN users u ON u.id = m.user_id
+      WHERE m.project_id = ? AND m.id > ? ORDER BY m.id LIMIT ?
+    `),
+    messageById: db.prepare(`
+      SELECT m.*, u.name AS user_name FROM messages m JOIN users u ON u.id = m.user_id WHERE m.id = ?
+    `),
   };
 
   return {
@@ -240,7 +282,7 @@ export function openDb(path: string) {
         throw e;
       }
     },
-    /** Also removes its members and documents (ON DELETE CASCADE). Image files are the caller's job. */
+    /** Also removes its members, documents and messages (ON DELETE CASCADE). Image files are the caller's job. */
     deleteProject(id: string): void {
       q.deleteProject.run(id);
     },
@@ -302,6 +344,17 @@ export function openDb(path: string) {
     deleteDocument(id: string): void {
       q.deleteDoc.run(id);
     },
+
+    // Messages.
+    /** Oldest first, at most `MESSAGE_PAGE` after `afterId`. */
+    listMessages(projectId: string, afterId: number): MessageRow[] {
+      return (q.messagesAfter.all(projectId, afterId, MESSAGE_PAGE) as SqlMessage[]).map(messageFromSql);
+    },
+    insertMessage(projectId: string, userId: string, body: string, now: number): MessageRow {
+      const { lastInsertRowid } = q.insertMessage.run(projectId, userId, body, now);
+      return messageFromSql(q.messageById.get(lastInsertRowid) as SqlMessage);
+    },
+
     close(): void {
       db.close();
     },

@@ -150,6 +150,7 @@ export function ProjectScreen({ projectId }: { projectId: string }) {
                 )}
               </View>
             )}
+            <Button label="Chat" icon="chat" variant="secondary" onPress={() => router.push(`/projects/${projectId}/chat`)} />
             {docs.length > 0 && <Text style={typography.section}>Photos</Text>}
           </View>
         }

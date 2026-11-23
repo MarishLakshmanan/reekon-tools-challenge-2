@@ -20,6 +20,8 @@ const ICONS = {
   sparkles: { ios: "sparkles", android: "auto_awesome" },
   send: { ios: "arrow.up.circle.fill", android: "send" },
   done: { ios: "checkmark.circle.fill", android: "check_circle" },
+  chat: { ios: "bubble.left.and.bubble.right", android: "chat" },
+  refresh: { ios: "arrow.clockwise", android: "refresh" },
 } as const;
 
 export type IconName = keyof typeof ICONS;

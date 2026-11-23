@@ -241,6 +241,71 @@ describe("projects", () => {
   });
 });
 
+describe("project chat", () => {
+  const send = (projectId: string, body: unknown, user: string) =>
+    fetch(`${base}/projects/${projectId}/messages`, as(user, json("POST", { body })));
+  const read = async (projectId: string, user: string, after = 0) =>
+    (await get(`/projects/${projectId}/messages?after=${after}`, user)).json();
+
+  test("the owner and members send and read messages in order, with sender names", async () => {
+    await makeProject("chat1", ["u2"]);
+    const first = await send("chat1", "  hello  ", "u1");
+    assert.equal(first.status, 201);
+    const sent = await first.json();
+    assert.equal(sent.body, "hello");
+    assert.equal(sent.userName, "A");
+    assert.equal((await send("chat1", "hi", "u2")).status, 201);
+
+    const list = await read("chat1", "u2");
+    assert.deepEqual(
+      list.map((m: { userId: string; userName: string; body: string }) => [m.userId, m.userName, m.body]),
+      [["u1", "A", "hello"], ["u2", "B", "hi"]],
+    );
+  });
+
+  test("each project has its own chat", async () => {
+    await makeProject("chat2a");
+    await makeProject("chat2b");
+    await send("chat2a", "about a", "u1");
+    await send("chat2b", "about b", "u1");
+    assert.deepEqual((await read("chat2a", "u1")).map((m: { body: string }) => m.body), ["about a"]);
+    assert.deepEqual((await read("chat2b", "u1")).map((m: { body: string }) => m.body), ["about b"]);
+  });
+
+  test("after returns only newer messages", async () => {
+    await makeProject("chat3");
+    const first = await (await send("chat3", "one", "u1")).json();
+    await send("chat3", "two", "u1");
+    const newer = await read("chat3", "u1", first.id);
+    assert.deepEqual(newer.map((m: { body: string }) => m.body), ["two"]);
+    assert.equal((await get("/projects/chat3/messages?after=-1")).status, 400);
+  });
+
+  test("a blank or too long body gets 400", async () => {
+    await makeProject("chat4");
+    assert.equal((await send("chat4", "   ", "u1")).status, 400);
+    assert.equal((await send("chat4", "x".repeat(2001), "u1")).status, 400);
+  });
+
+  test("non-members and removed members get 404", async () => {
+    await makeProject("chat5", ["u2"]);
+    assert.equal((await get("/projects/chat5/messages", "u3")).status, 404);
+    assert.equal((await send("chat5", "hi", "u3")).status, 404);
+
+    await fetch(`${base}/projects/chat5/members/u2`, as("u1", { method: "DELETE" }));
+    assert.equal((await get("/projects/chat5/messages", "u2")).status, 404);
+    assert.equal((await send("chat5", "hi", "u2")).status, 404);
+  });
+
+  test("deleting the project deletes its messages", async () => {
+    await makeProject("chat6");
+    await send("chat6", "bye", "u1");
+    await fetch(`${base}/projects/chat6`, as("u1", { method: "DELETE" }));
+    await makeProject("chat6");
+    assert.deepEqual(await read("chat6", "u1"), []);
+  });
+});
+
 describe("documents API", () => {
   test("POST creates a document, and a retry returns it instead of a duplicate", async () => {
     await makeProject("docs1");

@@ -41,3 +41,7 @@ export const createProjectSchema = z.object({
 });
 
 export const addMemberSchema = z.object({ userId: z.string().min(1) });
+
+export const sendMessageSchema = z.object({ body: z.string().trim().min(1).max(2000) });
+
+export const messagesQuerySchema = z.object({ after: z.coerce.number().int().min(0).default(0) });
