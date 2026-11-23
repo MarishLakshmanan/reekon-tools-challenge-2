@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { type ComponentRef, useRef, useState } from "react";
+import { KeyboardAvoidingView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { ApiError } from "@/api/client";
 import { Button } from "@/components/Button";
@@ -14,6 +14,8 @@ export function SignInScreen() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [focus, setFocus] = useState<"email" | "password" | null>(null);
+  const root = useRef<ComponentRef<typeof View>>(null);
+  const [top, setTop] = useState(0);
 
   async function submit() {
     setBusy(true);
@@ -27,7 +29,10 @@ export function SignInScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    // Android is edge-to-edge, so the window doesn't resize for the keyboard; pad on both platforms.
+    // The offset is where this screen starts (below the header), so the padding covers the whole keyboard.
+    <View ref={root} style={styles.fill} onLayout={() => root.current?.measureInWindow((_x, y) => setTop(y))}>
+      <KeyboardAvoidingView style={styles.fill} behavior="padding" keyboardVerticalOffset={top}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={styles.hero}>
           <View style={styles.logo}>
@@ -73,7 +78,8 @@ export function SignInScreen() {
           <Button label="Sign in" onPress={submit} busy={busy} disabled={!email || !password} style={styles.submit} />
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
